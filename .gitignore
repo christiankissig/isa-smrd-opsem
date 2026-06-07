@@ -1,0 +1,7 @@
+.lvimrc
+.*.marks
+\#*\#
+*~
+*.log
+*.pdf
+*.aux
