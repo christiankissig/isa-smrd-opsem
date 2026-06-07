@@ -1,0 +1,132 @@
+{
+  "format_version": "0.1",
+  "program": "uaf-bug-fixed.lit",
+  "orders": [ "rlx", "acq", "rel", "acq_rel", "sc" ],
+  "init": [
+    {
+      "label": "g.1",
+      "loc": [ 1, 0 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rC", "size": { "int": 1 } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    },
+    {
+      "label": "g.2",
+      "loc": [ 1, 16 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rcu", "size": { "int": 1 } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    },
+    {
+      "label": "g.3",
+      "loc": [ 2, 17 ],
+      "loops": [],
+      "command": { "op": "Set", "dst": "rcu", "expr": { "int": 0 } },
+      "events": []
+    }
+  ],
+  "threads": [
+    {
+      "tid": 0,
+      "body": [
+        {
+          "label": "t0.1",
+          "loc": [ 4, 1 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "reg": "rcu" }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.2",
+          "loc": [ 5, 16 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 0 } ] },
+            "then": [
+              {
+                "label": "t0.3",
+                "loc": [ 6, 18 ],
+                "loops": [],
+                "command": { "op": "Free", "ptr": "rC" },
+                "events": [ { "k": 0, "type": "Dealloc" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        }
+      ]
+    },
+    {
+      "tid": 1,
+      "body": [
+        {
+          "label": "t1.1",
+          "loc": [ 11, 1 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "acq",
+            "ptr": { "reg": "rcu" },
+            "val": { "int": 1 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t1.2",
+          "loc": [ 12, 15 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rv",
+            "ptr": { "reg": "rC" }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.3",
+          "loc": [ 13, 12 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rel",
+            "ptr": { "reg": "rcu" },
+            "val": { "int": 0 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        }
+      ]
+    }
+  ],
+  "futures": [
+    {
+      "execution": 0,
+      "edges": [
+        [ "g.1#0", "t1.2#0" ],
+        [ "g.1#0", "t1.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "t1.1#0", "t1.3#0" ],
+        [ "t1.2#0", "t1.3#0" ]
+      ]
+    },
+    {
+      "execution": 1,
+      "edges": [
+        [ "g.1#0", "t0.3#0" ],
+        [ "g.1#0", "t1.2#0" ],
+        [ "g.1#0", "t1.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "t0.1#0", "t0.3#0" ],
+        [ "t1.1#0", "t1.3#0" ],
+        [ "t1.2#0", "t1.3#0" ]
+      ]
+    }
+  ]
+}

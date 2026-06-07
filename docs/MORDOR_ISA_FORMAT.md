@@ -1,10 +1,11 @@
 # mordor ↔ Isabelle interchange format (`isa` output) — SPECIFICATION
 
-**Status:** v0.1 **draft** — a concrete first cut to implement mordor against and iterate.
-This spec is a **deliverable of `rcu-c11-opsem`** and the **contract** for mordor's `isa` output
-mode (currently broken/incomplete). The Isabelle side's needs drive the format; mordor is
-implemented against it. See `REWORK_PLAN.md` §5 (interchange format), Decision 8, W15, §4 Q1–Q5.
-Finalised in **Spike B**.
+**Status:** v0.1 — **implemented in mordor and conformance-passing (2026-06-07).** mordor's
+`isa` output mode (`src/isa_export.ml`) now emits this schema; verified against
+`uaf-bug{,-fixed}.lit` (structure + bug/fix discriminating edge) and `cas_aba.lit` (RMW
+sub-events + loop-iteration suffixes). This spec is a **deliverable of `rcu-c11-opsem`** and the
+**contract** for that output. See `REWORK_PLAN.md` §5 (interchange format), Decision 8, W15,
+§4 Q1–Q5. v0.2 refinements + RCU validation pending in **Spike B**.
 
 ## 0. Boundary decision *(leaning, confirm)*
 mordor emits a **versioned structured JSON** per this schema; the repo's `scripts/generate_phi.py`
@@ -134,9 +135,15 @@ edge from §5 / `tab-fut-step-fix`, which keeps the free out of the horizon unti
 Event-labels `i.11#0` (R), `i.11#1` (Branch), `i.11#2` (W); on a failing CAS the `W` (`#2`) is
 absent. `Φ` edges reference these event-labels.
 
-## 7. Open decisions (Spike B)
-- Instruction-label = `t.seq` vs source `line:col` (§2).
-- Control flow as **nested** `then`/`else`/`body` (above) vs a **flat** labelled list with branch
-  targets — the renderer's job either way; nested is the readable first cut.
-- The `loops`/`iter` encoding (§2) — the one part UAF doesn't exercise; validate on **RCU**.
-- Confirm the §0 boundary (schema + repo-side rendering).
+## 7. Open decisions (v0.2 / Spike B)
+- Instruction-label = `t.seq` vs source `line:col` (§2). *(v0.1 impl uses `t<tid>.<seq>` /
+  `g.<seq>`, 1-based pre-order per thread.)*
+- Control flow as **nested** `then`/`else`/`body` (impl) vs a **flat** labelled list with branch
+  targets — renderer's job either way; nested is the readable first cut.
+- The `loops`/`iter` encoding (§2) — validated best-effort on `cas_aba.lit`
+  (`t0.4@1:1#0`, `t0.7@1:1#2`); **validate fully on RCU** (real retry loops).
+- **"After-threads" statements (v0.2):** a top-level statement following the threads block
+  (e.g. the trailing `rv := *rC` in `cas_aba.lit`) is currently bucketed into `init`, since the
+  schema has no epilogue section. Decide: add a `"fini"`/`"epilogue"` array, or keep folding into
+  `init` (documented).
+- §0 boundary confirmed for v0.1: mordor emits the schema; repo renders Isabelle.

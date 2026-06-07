@@ -13,6 +13,12 @@ $BIN futures    --single mordor/programs/uaf-bug-fixed.lit --output-mode json --
 python3 spike_join.py
 ```
 
+## `isa` output (the specified interchange format — mordor-side implemented 2026-06-07)
+- `uaf_isa.json`, `uaf_fixed_isa.json`, `cas_aba_isa.json` — `futures --output-mode isa` per
+  `docs/MORDOR_ISA_FORMAT.md` v0.1. uaf-bug/fixed reproduce the bug/fix discriminating edge;
+  cas_aba shows RMW sub-events + loop-iteration labels. Command:
+  `mordor futures --single P.lit --output-mode isa --output-file P_isa.json`.
+
 ## Files
 - `uaf_exec.json`, `uaf_fixed_exec.json` — `executions` export: labelled events
   (`id`, `type` ∈ I/A/W/R/D/T, `location`, `rval`/`wval`, `rmod`/`wmod`, `thread`) **+**
