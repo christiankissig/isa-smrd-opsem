@@ -1,0 +1,1395 @@
+{
+  "format_version": "0.1",
+  "program": "rcu3",
+  "orders": [ "rlx", "acq", "rel", "acq_rel", "sc" ],
+  "init": [
+    {
+      "label": "g.1",
+      "loc": [ 2, 2 ],
+      "loops": [],
+      "command": { "op": "Set", "dst": "rN", "expr": { "int": 3 } },
+      "events": []
+    },
+    {
+      "label": "g.2",
+      "loc": [ 3, 8 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rrcu", "size": { "reg": "rN" } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    },
+    {
+      "label": "g.3",
+      "loc": [ 5, 18 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] },
+        "val": { "int": 0 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    },
+    {
+      "label": "g.4",
+      "loc": [ 6, 17 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 1 } ] },
+        "val": { "int": 0 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    },
+    {
+      "label": "g.5",
+      "loc": [ 7, 17 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 2 } ] },
+        "val": { "int": 0 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    },
+    {
+      "label": "g.6",
+      "loc": [ 8, 17 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rC", "size": { "int": 1 } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    },
+    {
+      "label": "g.7",
+      "loc": [ 10, 15 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "reg": "rC" },
+        "val": { "int": 0 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    },
+    {
+      "label": "g.8",
+      "loc": [ 11, 9 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rdet", "size": { "reg": "rN" } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    }
+  ],
+  "threads": [
+    {
+      "tid": 0,
+      "body": [
+        {
+          "label": "t0.1",
+          "loc": [ 15, 1 ],
+          "loops": [],
+          "command": { "op": "Set", "dst": "rtid", "expr": { "int": 0 } },
+          "events": []
+        },
+        {
+          "label": "t0.2",
+          "loc": [ 17, 12 ],
+          "loops": [],
+          "command": { "op": "Alloc", "dst": "rn", "size": { "int": 1 } },
+          "events": [ { "k": 0, "type": "Alloc" } ]
+        },
+        {
+          "label": "t0.3",
+          "loc": [ 18, 17 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+            "val": { "int": 1 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t0.4",
+          "loc": [ 19, 20 ],
+          "loops": [],
+          "command": {
+            "op": "Do",
+            "cond": { "eq": [ { "reg": "rsucc" }, { "int": 0 } ] },
+            "body": [
+              {
+                "label": "t0.5",
+                "loc": [ 20, 6 ],
+                "loops": [ 1 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+                  "val": { "int": 0 }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t0.6",
+                "loc": [ 21, 22 ],
+                "loops": [ 1 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+                  "val": { "int": 1 }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t0.7",
+                "loc": [ 22, 22 ],
+                "loops": [ 1 ],
+                "command": {
+                  "op": "Faa",
+                  "order_r": "acq",
+                  "order_w": "rel",
+                  "dst": "rs",
+                  "loc": { "reg": "rC" },
+                  "addend": { "int": 0 },
+                  "rmw_op": "strong"
+                },
+                "events": [
+                  { "k": 0, "type": "R" }, { "k": 1, "type": "W" }
+                ]
+              },
+              {
+                "label": "t0.8",
+                "loc": [ 23, 37 ],
+                "loops": [ 1 ],
+                "command": {
+                  "op": "ReadPtr",
+                  "order": "rlx",
+                  "dst": "rv",
+                  "ptr": { "reg": "rs" }
+                },
+                "events": [ { "k": 0, "type": "R" } ]
+              },
+              {
+                "label": "t0.9",
+                "loc": [ 24, 14 ],
+                "loops": [ 1 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "reg": "rn" },
+                  "val": { "add": [ { "reg": "rv" }, { "int": 1 } ] }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t0.10",
+                "loc": [ 25, 16 ],
+                "loops": [ 1 ],
+                "command": {
+                  "op": "Cas",
+                  "order_r": "acq",
+                  "order_w": "rel",
+                  "dst": "rsucc",
+                  "loc": { "reg": "rC" },
+                  "expected": { "reg": "rs" },
+                  "new": { "reg": "rn" }
+                },
+                "events": [
+                  { "k": 0, "type": "R" },
+                  { "k": 1, "type": "Branch" },
+                  { "k": 2, "type": "W" }
+                ]
+              }
+            ],
+            "loop_id": 1
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t0.11",
+          "loc": [ 27, 22 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+            "val": { "int": 0 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t0.12",
+          "loc": [ 28, 20 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rdet" }, { "reg": "rtid" } ] },
+            "val": { "reg": "rs" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t0.13",
+          "loc": [ 31, 23 ],
+          "loops": [],
+          "command": {
+            "op": "Alloc",
+            "dst": "rr",
+            "size": { "add": [ { "reg": "rN" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "Alloc" } ]
+        },
+        {
+          "label": "t0.14",
+          "loc": [ 34, 22 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.15",
+          "loc": [ 35, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 0 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t0.16",
+          "loc": [ 35, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.17",
+          "loc": [ 36, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 1 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t0.18",
+          "loc": [ 36, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 2 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.19",
+          "loc": [ 37, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 2 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t0.20",
+          "loc": [ 37, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 0 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.21",
+          "loc": [ 39, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t0.22",
+                "loc": [ 41, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t0.23",
+                      "loc": [ 43, 5 ],
+                      "loops": [ 2 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 2
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t0.24",
+          "loc": [ 47, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.25",
+          "loc": [ 49, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t0.26",
+                "loc": [ 51, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t0.27",
+                      "loc": [ 53, 5 ],
+                      "loops": [ 3 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 1 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 3
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t0.28",
+          "loc": [ 57, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 2 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.29",
+          "loc": [ 59, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t0.30",
+                "loc": [ 61, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t0.31",
+                      "loc": [ 63, 5 ],
+                      "loops": [ 4 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 2 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 4
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t0.32",
+          "loc": [ 67, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rdet" }, { "reg": "rtid" } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t0.33",
+          "loc": [ 70, 26 ],
+          "loops": [],
+          "command": { "op": "Free", "ptr": "rtemp" },
+          "events": [ { "k": 0, "type": "Dealloc" } ]
+        }
+      ]
+    },
+    {
+      "tid": 1,
+      "body": [
+        {
+          "label": "t1.1",
+          "loc": [ 74, 1 ],
+          "loops": [],
+          "command": { "op": "Set", "dst": "rtid", "expr": { "int": 1 } },
+          "events": []
+        },
+        {
+          "label": "t1.2",
+          "loc": [ 76, 12 ],
+          "loops": [],
+          "command": { "op": "Alloc", "dst": "rn", "size": { "int": 1 } },
+          "events": [ { "k": 0, "type": "Alloc" } ]
+        },
+        {
+          "label": "t1.3",
+          "loc": [ 77, 17 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+            "val": { "int": 1 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t1.4",
+          "loc": [ 78, 20 ],
+          "loops": [],
+          "command": {
+            "op": "Do",
+            "cond": { "eq": [ { "reg": "rsucc" }, { "int": 0 } ] },
+            "body": [
+              {
+                "label": "t1.5",
+                "loc": [ 79, 6 ],
+                "loops": [ 5 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+                  "val": { "int": 0 }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t1.6",
+                "loc": [ 80, 22 ],
+                "loops": [ 5 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+                  "val": { "int": 1 }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t1.7",
+                "loc": [ 81, 22 ],
+                "loops": [ 5 ],
+                "command": {
+                  "op": "Faa",
+                  "order_r": "acq",
+                  "order_w": "rel",
+                  "dst": "rs",
+                  "loc": { "reg": "rC" },
+                  "addend": { "int": 0 },
+                  "rmw_op": "strong"
+                },
+                "events": [
+                  { "k": 0, "type": "R" }, { "k": 1, "type": "W" }
+                ]
+              },
+              {
+                "label": "t1.8",
+                "loc": [ 82, 37 ],
+                "loops": [ 5 ],
+                "command": {
+                  "op": "ReadPtr",
+                  "order": "rlx",
+                  "dst": "rv",
+                  "ptr": { "reg": "rs" }
+                },
+                "events": [ { "k": 0, "type": "R" } ]
+              },
+              {
+                "label": "t1.9",
+                "loc": [ 83, 14 ],
+                "loops": [ 5 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "reg": "rn" },
+                  "val": { "add": [ { "reg": "rv" }, { "int": 1 } ] }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t1.10",
+                "loc": [ 84, 16 ],
+                "loops": [ 5 ],
+                "command": {
+                  "op": "Cas",
+                  "order_r": "acq",
+                  "order_w": "rel",
+                  "dst": "rsucc",
+                  "loc": { "reg": "rC" },
+                  "expected": { "reg": "rs" },
+                  "new": { "reg": "rn" }
+                },
+                "events": [
+                  { "k": 0, "type": "R" },
+                  { "k": 1, "type": "Branch" },
+                  { "k": 2, "type": "W" }
+                ]
+              }
+            ],
+            "loop_id": 5
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t1.11",
+          "loc": [ 86, 22 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+            "val": { "int": 0 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t1.12",
+          "loc": [ 87, 22 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rdet" }, { "reg": "rtid" } ] },
+            "val": { "reg": "rs" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t1.13",
+          "loc": [ 90, 23 ],
+          "loops": [],
+          "command": {
+            "op": "Alloc",
+            "dst": "rr",
+            "size": { "add": [ { "reg": "rN" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "Alloc" } ]
+        },
+        {
+          "label": "t1.14",
+          "loc": [ 93, 22 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.15",
+          "loc": [ 94, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 0 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t1.16",
+          "loc": [ 94, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.17",
+          "loc": [ 95, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 1 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t1.18",
+          "loc": [ 95, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 2 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.19",
+          "loc": [ 96, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 2 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t1.20",
+          "loc": [ 96, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 0 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.21",
+          "loc": [ 98, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t1.22",
+                "loc": [ 100, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t1.23",
+                      "loc": [ 102, 5 ],
+                      "loops": [ 6 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 6
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t1.24",
+          "loc": [ 106, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.25",
+          "loc": [ 108, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t1.26",
+                "loc": [ 110, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t1.27",
+                      "loc": [ 112, 5 ],
+                      "loops": [ 7 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 1 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 7
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t1.28",
+          "loc": [ 116, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 2 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.29",
+          "loc": [ 118, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t1.30",
+                "loc": [ 120, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t1.31",
+                      "loc": [ 122, 5 ],
+                      "loops": [ 8 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 2 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 8
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t1.32",
+          "loc": [ 126, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rdet" }, { "reg": "rtid" } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t1.33",
+          "loc": [ 129, 26 ],
+          "loops": [],
+          "command": { "op": "Free", "ptr": "rtemp" },
+          "events": [ { "k": 0, "type": "Dealloc" } ]
+        }
+      ]
+    },
+    {
+      "tid": 2,
+      "body": [
+        {
+          "label": "t2.1",
+          "loc": [ 133, 1 ],
+          "loops": [],
+          "command": { "op": "Set", "dst": "rtid", "expr": { "int": 2 } },
+          "events": []
+        },
+        {
+          "label": "t2.2",
+          "loc": [ 135, 12 ],
+          "loops": [],
+          "command": { "op": "Alloc", "dst": "rn", "size": { "int": 1 } },
+          "events": [ { "k": 0, "type": "Alloc" } ]
+        },
+        {
+          "label": "t2.3",
+          "loc": [ 136, 17 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+            "val": { "int": 1 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t2.4",
+          "loc": [ 137, 20 ],
+          "loops": [],
+          "command": {
+            "op": "Do",
+            "cond": { "eq": [ { "reg": "rsucc" }, { "int": 0 } ] },
+            "body": [
+              {
+                "label": "t2.5",
+                "loc": [ 138, 6 ],
+                "loops": [ 9 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+                  "val": { "int": 0 }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t2.6",
+                "loc": [ 139, 22 ],
+                "loops": [ 9 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+                  "val": { "int": 1 }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t2.7",
+                "loc": [ 140, 22 ],
+                "loops": [ 9 ],
+                "command": {
+                  "op": "Faa",
+                  "order_r": "acq",
+                  "order_w": "rel",
+                  "dst": "rs",
+                  "loc": { "reg": "rC" },
+                  "addend": { "int": 0 },
+                  "rmw_op": "strong"
+                },
+                "events": [
+                  { "k": 0, "type": "R" }, { "k": 1, "type": "W" }
+                ]
+              },
+              {
+                "label": "t2.8",
+                "loc": [ 141, 37 ],
+                "loops": [ 9 ],
+                "command": {
+                  "op": "ReadPtr",
+                  "order": "rlx",
+                  "dst": "rv",
+                  "ptr": { "reg": "rs" }
+                },
+                "events": [ { "k": 0, "type": "R" } ]
+              },
+              {
+                "label": "t2.9",
+                "loc": [ 142, 14 ],
+                "loops": [ 9 ],
+                "command": {
+                  "op": "WritePtr",
+                  "order": "rlx",
+                  "ptr": { "reg": "rn" },
+                  "val": { "add": [ { "reg": "rv" }, { "int": 1 } ] }
+                },
+                "events": [ { "k": 0, "type": "W" } ]
+              },
+              {
+                "label": "t2.10",
+                "loc": [ 143, 16 ],
+                "loops": [ 9 ],
+                "command": {
+                  "op": "Cas",
+                  "order_r": "acq",
+                  "order_w": "rel",
+                  "dst": "rsucc",
+                  "loc": { "reg": "rC" },
+                  "expected": { "reg": "rs" },
+                  "new": { "reg": "rn" }
+                },
+                "events": [
+                  { "k": 0, "type": "R" },
+                  { "k": 1, "type": "Branch" },
+                  { "k": 2, "type": "W" }
+                ]
+              }
+            ],
+            "loop_id": 9
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t2.11",
+          "loc": [ 145, 22 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+            "val": { "int": 0 }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t2.12",
+          "loc": [ 146, 22 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rdet" }, { "reg": "rtid" } ] },
+            "val": { "reg": "rs" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t2.13",
+          "loc": [ 149, 23 ],
+          "loops": [],
+          "command": {
+            "op": "Alloc",
+            "dst": "rr",
+            "size": { "add": [ { "reg": "rN" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "Alloc" } ]
+        },
+        {
+          "label": "t2.14",
+          "loc": [ 152, 22 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t2.15",
+          "loc": [ 153, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 0 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t2.16",
+          "loc": [ 153, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t2.17",
+          "loc": [ 154, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 1 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t2.18",
+          "loc": [ 154, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rrcu" }, { "int": 2 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t2.19",
+          "loc": [ 155, 23 ],
+          "loops": [],
+          "command": {
+            "op": "WritePtr",
+            "order": "rlx",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 2 } ] },
+            "val": { "reg": "rtemp" }
+          },
+          "events": [ { "k": 0, "type": "W" } ]
+        },
+        {
+          "label": "t2.20",
+          "loc": [ 155, 42 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 0 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t2.21",
+          "loc": [ 157, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t2.22",
+                "loc": [ 159, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t2.23",
+                      "loc": [ 161, 5 ],
+                      "loops": [ 10 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 10
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t2.24",
+          "loc": [ 165, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 1 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t2.25",
+          "loc": [ 167, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t2.26",
+                "loc": [ 169, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t2.27",
+                      "loc": [ 171, 5 ],
+                      "loops": [ 11 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 1 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 11
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t2.28",
+          "loc": [ 175, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rr" }, { "int": 2 } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t2.29",
+          "loc": [ 177, 21 ],
+          "loops": [],
+          "command": {
+            "op": "If",
+            "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+            "then": [
+              {
+                "label": "t2.30",
+                "loc": [ 179, 3 ],
+                "loops": [],
+                "command": {
+                  "op": "Do",
+                  "cond": { "eq": [ { "reg": "rtemp" }, { "int": 1 } ] },
+                  "body": [
+                    {
+                      "label": "t2.31",
+                      "loc": [ 181, 5 ],
+                      "loops": [ 12 ],
+                      "command": {
+                        "op": "ReadPtr",
+                        "order": "rlx",
+                        "dst": "rtemp",
+                        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 2 } ] }
+                      },
+                      "events": [ { "k": 0, "type": "R" } ]
+                    }
+                  ],
+                  "loop_id": 12
+                },
+                "events": [ { "k": 0, "type": "Branch" } ]
+              }
+            ],
+            "else": []
+          },
+          "events": [ { "k": 0, "type": "Branch" } ]
+        },
+        {
+          "label": "t2.32",
+          "loc": [ 185, 4 ],
+          "loops": [],
+          "command": {
+            "op": "ReadPtr",
+            "order": "rlx",
+            "dst": "rtemp",
+            "ptr": { "add": [ { "reg": "rdet" }, { "reg": "rtid" } ] }
+          },
+          "events": [ { "k": 0, "type": "R" } ]
+        },
+        {
+          "label": "t2.33",
+          "loc": [ 188, 26 ],
+          "loops": [],
+          "command": { "op": "Free", "ptr": "rtemp" },
+          "events": [ { "k": 0, "type": "Dealloc" } ]
+        }
+      ]
+    }
+  ],
+  "futures": [
+    {
+      "execution": 0,
+      "edges": [
+        [ "g.2#0", "g.4#0" ],
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.4#0", "t1.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    },
+    {
+      "execution": 1,
+      "edges": [
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    },
+    {
+      "execution": 2,
+      "edges": [
+        [ "g.2#0", "g.3#0" ],
+        [ "g.2#0", "g.4#0" ],
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.3#0", "t0.3#0" ],
+        [ "g.4#0", "t1.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    },
+    {
+      "execution": 3,
+      "edges": [
+        [ "g.2#0", "g.3#0" ],
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.3#0", "t0.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    },
+    {
+      "execution": 4,
+      "edges": [
+        [ "g.2#0", "g.4#0" ],
+        [ "g.2#0", "g.5#0" ],
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.4#0", "t1.3#0" ],
+        [ "g.5#0", "t2.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    },
+    {
+      "execution": 5,
+      "edges": [
+        [ "g.2#0", "g.5#0" ],
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.5#0", "t2.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    },
+    {
+      "execution": 6,
+      "edges": [
+        [ "g.2#0", "g.3#0" ],
+        [ "g.2#0", "g.4#0" ],
+        [ "g.2#0", "g.5#0" ],
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.3#0", "t0.3#0" ],
+        [ "g.4#0", "t1.3#0" ],
+        [ "g.5#0", "t2.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    },
+    {
+      "execution": 7,
+      "edges": [
+        [ "g.2#0", "g.3#0" ],
+        [ "g.2#0", "g.5#0" ],
+        [ "g.2#0", "t0.3#0" ],
+        [ "g.2#0", "t1.3#0" ],
+        [ "g.2#0", "t2.3#0" ],
+        [ "g.3#0", "t0.3#0" ],
+        [ "g.5#0", "t2.3#0" ],
+        [ "g.6#0", "g.7#0" ]
+      ]
+    }
+  ]
+}

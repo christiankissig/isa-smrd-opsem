@@ -147,3 +147,9 @@ absent. `Φ` edges reference these event-labels.
   schema has no epilogue section. Decide: add a `"fini"`/`"epilogue"` array, or keep folding into
   `init` (documented).
 - §0 boundary confirmed for v0.1: mordor emits the schema; repo renders Isabelle.
+- **Grammar gaps found by the W3 renderer (add in v0.2):** `Do` (do-while) op appears in
+  `cas_aba` but is not in §3 (renderer treats it like `While`); and `Faa`/`Cas` carry an
+  `rmw_op` field (`"strong"`) not in the §3 operand table (currently dropped). Add both to §3.
+- **Provenance decision (Spike B / §4 Q1):** the digest is **hand-authored + machine-checked**
+  against the `isa` structural dump; the W3 renderer is a fallback. So `isa` is the *check
+  oracle* for the program, and the *source of truth* for Φ.

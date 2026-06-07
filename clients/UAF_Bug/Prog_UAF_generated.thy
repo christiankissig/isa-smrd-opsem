@@ -1,0 +1,255 @@
+(*
+  GENERATED FILE -- do not hand-edit.
+
+  Rendered by scripts/generate_phi.py (repo-side renderer, REWORK_PLAN.md s5 / W3)
+  from a mordor `isa`-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
+
+  Source program : uaf-bug.lit
+  Producing cmd  : mordor futures --single uaf-bug.lit --output-mode isa
+                   (rendered: scripts/generate_phi.py <isa.json> -o <this file>)
+  Memory orders  : rlx, acq, rel, acq_rel, sc
+
+  Contents:
+    * provisional encoding types (WIP, to be replaced by Spike B Core types)
+    * the digested program: per-thread `LABEL is INSTRUCTION` lists
+    * \<Phi>_uaf_bug : the future set, one edge-set over event-labels per execution
+
+  Notes / faithfulness:
+    * RMW (Faa/Cas) is ONE instruction carrying several events (#0,#1,#2).
+    * Loop-iteration event-labels (e.g. t0.4@1:1#0) are rendered verbatim in \<Phi>.
+    * Edges are rendered as in the JSON; reflexive (identity) closure is left to
+      the consumer (MORDOR_ISA_FORMAT.md s1).
+    * Faa/Cas `rmw_op` (strong/weak) is present in the schema but NOT rendered here.
+*)
+
+theory Prog_UAF_generated
+  imports Main
+begin
+
+section \<open>PROVISIONAL / WIP encoding types\<close>
+
+text \<open>
+  The datatypes below are a minimal placeholder vocabulary so that the
+  generated digest and \<open>\<Phi>\<close> are well-formed Isabelle.  They are
+  intentionally lightweight and are TO BE REPLACED by the Core action /
+  command / order types from Spike B.  Nothing here is meant to be definitive.
+\<close>
+
+datatype mem_order = rlx | acq | rel | acq_rel | sc
+
+datatype expr =
+    EInt int
+  | EReg string
+  | EEq expr expr
+  | EAdd expr expr
+  | EOp string "expr list"   \<comment> \<open>generic n-ary operator fall-back\<close>
+
+type_synonym reg = string
+type_synonym label = string
+type_synonym loop_id = int
+
+text \<open>One source instruction = one abstract \<open>command\<close> with full operands.
+  An RMW (\<open>Faa\<close>, \<open>Cas\<close>) is a single command carrying several events.
+  Control flow (\<open>If\<close>/\<open>While\<close>/\<open>Do\<close>) keeps the program \emph{rolled}: the
+  branches/bodies are themselves digests.\<close>
+
+datatype command =
+    Set reg expr
+  | ReadPtr mem_order reg expr
+  | ReadVar mem_order reg string
+  | ReadRef reg string
+  | WritePtr mem_order expr expr
+  | WriteVar mem_order string expr
+  | Faa mem_order mem_order reg expr expr
+  | Cas mem_order mem_order reg expr expr expr
+  | Alloc reg expr
+  | Free expr
+  | Fence mem_order
+  | If expr "(label \<times> command) list" "(label \<times> command) list"
+  | While expr "(label \<times> command) list" loop_id
+  | Do expr "(label \<times> command) list" loop_id
+
+text \<open>The digest notation \<open>LABEL is INSTRUCTION\<close>.  (PROVISIONAL: \<open>is\<close> is a
+  reserved outer-syntax keyword used in term-abbreviation patterns; should that
+  clash, rename this mixfix when wiring in the Spike B Core types.)\<close>
+
+definition entry :: "label \<Rightarrow> command \<Rightarrow> (label \<times> command)"  (infix "is" 49)
+  where "lbl is cmd \<equiv> (lbl, cmd)"
+
+
+section \<open>Digested program: uaf-bug.lit\<close>
+
+definition prog_uaf_bug_init :: "(label \<times> command) list" where
+  "prog_uaf_bug_init =
+  [
+       ''g.1'' is Alloc ''rC'' (EInt 1),
+       ''g.2'' is WritePtr rlx (EReg ''rC'') (EInt 0),
+       ''g.3'' is Alloc ''rcu'' (EInt 1),
+       ''g.4'' is WritePtr rlx (EReg ''rcu'') (EInt 1)
+       ]
+  "
+
+definition prog_uaf_bug_t0 :: "(label \<times> command) list" where
+  "prog_uaf_bug_t0 =
+  [
+       ''t0.1'' is ReadPtr rlx ''rtemp'' (EReg ''rcu''),
+       ''t0.2'' is If (EEq (EReg ''rtemp'') (EInt 0))
+           [
+           ''t0.3'' is Free (EReg ''rC'')
+           ]
+           []
+       ]
+  "
+
+definition prog_uaf_bug_t1 :: "(label \<times> command) list" where
+  "prog_uaf_bug_t1 =
+  [
+       ''t1.1'' is ReadPtr rlx ''rv'' (EReg ''rC''),
+       ''t1.2'' is WritePtr rlx (EReg ''rcu'') (EInt 0)
+       ]
+  "
+
+definition prog_uaf_bug :: "(label \<times> command) list list" where
+  "prog_uaf_bug = [prog_uaf_bug_init, prog_uaf_bug_t0, prog_uaf_bug_t1]"
+
+text \<open>Event \<open>\<rightarrow>\<close> instruction map (event-label, instruction-label, type).\<close>
+definition evmap_uaf_bug :: "(string \<times> string \<times> string) list" where
+  "evmap_uaf_bug = [
+  (''g.1#0'', ''g.1'', ''Alloc''),
+  (''g.2#0'', ''g.2'', ''W''),
+  (''g.3#0'', ''g.3'', ''Alloc''),
+  (''g.4#0'', ''g.4'', ''W''),
+  (''t0.1#0'', ''t0.1'', ''R''),
+  (''t0.2#0'', ''t0.2'', ''Branch''),
+  (''t0.3#0'', ''t0.3'', ''Dealloc''),
+  (''t1.1#0'', ''t1.1'', ''R''),
+  (''t1.2#0'', ''t1.2'', ''W'')
+  ]"
+
+section \<open>Future set \<open>\<Phi>\<close>\<close>
+
+text \<open>Each execution contributes one edge-set (\<open>(ppo \<union> dp)\<close> over
+  event-labels); \<open>\<Phi>_uaf_bug\<close> is the set of those edge-sets.\<close>
+
+definition \<Phi>_uaf_bug_exec0 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec0 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''t0.1#0''),
+  (''g.4#0'', ''t1.2#0'')
+  }"
+
+definition \<Phi>_uaf_bug_exec1 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec1 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''t1.1#0''),
+  (''g.2#0'', ''t1.1#0''),
+  (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''t0.1#0''),
+  (''g.4#0'', ''t1.2#0'')
+  }"
+
+definition \<Phi>_uaf_bug_exec2 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec2 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''t0.3#0''),
+  (''g.2#0'', ''t0.3#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''t0.1#0'', ''t0.3#0''),
+  (''t1.2#0'', ''t0.1#0'')
+  }"
+
+definition \<Phi>_uaf_bug_exec3 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec3 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''t0.3#0''),
+  (''g.2#0'', ''t0.3#0''),
+  (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''t0.1#0''),
+  (''g.4#0'', ''t1.2#0''),
+  (''t0.1#0'', ''t0.3#0'')
+  }"
+
+definition \<Phi>_uaf_bug_exec4 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec4 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''t0.3#0''),
+  (''g.1#0'', ''t1.1#0''),
+  (''g.2#0'', ''t0.3#0''),
+  (''g.2#0'', ''t1.1#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''t0.1#0'', ''t0.3#0''),
+  (''t1.2#0'', ''t0.1#0'')
+  }"
+
+definition \<Phi>_uaf_bug_exec5 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec5 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''t0.3#0''),
+  (''g.1#0'', ''t1.1#0''),
+  (''g.2#0'', ''t0.3#0''),
+  (''g.2#0'', ''t1.1#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''t0.1#0'', ''t0.3#0''),
+  (''t1.2#0'', ''t0.1#0'')
+  }"
+
+definition \<Phi>_uaf_bug_exec6 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec6 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''t0.3#0''),
+  (''g.1#0'', ''t1.1#0''),
+  (''g.2#0'', ''t0.3#0''),
+  (''g.2#0'', ''t1.1#0''),
+  (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''t0.1#0''),
+  (''g.4#0'', ''t1.2#0''),
+  (''t0.1#0'', ''t0.3#0'')
+  }"
+
+definition \<Phi>_uaf_bug_exec7 :: "(string \<times> string) set" where
+  "\<Phi>_uaf_bug_exec7 =
+  {
+  (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''t0.3#0''),
+  (''g.1#0'', ''t1.1#0''),
+  (''g.2#0'', ''t0.3#0''),
+  (''g.2#0'', ''t1.1#0''),
+  (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''t0.1#0''),
+  (''g.4#0'', ''t1.2#0''),
+  (''t0.1#0'', ''t0.3#0'')
+  }"
+
+definition \<Phi>_uaf_bug :: "(string \<times> string) set set" where
+  "\<Phi>_uaf_bug =
+  { \<Phi>_uaf_bug_exec0,
+    \<Phi>_uaf_bug_exec1,
+    \<Phi>_uaf_bug_exec2,
+    \<Phi>_uaf_bug_exec3,
+    \<Phi>_uaf_bug_exec4,
+    \<Phi>_uaf_bug_exec5,
+    \<Phi>_uaf_bug_exec6,
+    \<Phi>_uaf_bug_exec7 }"
+
+end
