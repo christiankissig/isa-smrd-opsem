@@ -1,0 +1,17 @@
+chapter AFP
+
+session EventStruct = Core +
+  description \<open>
+    EventStruct: the SMRD event-structure semantics -- events, preserved program
+    order ppo, semantic dependency DP, executions; the future set Phi (a set of
+    edge-sets over event-labels, one per execution, matching the generated Phi_P),
+    histories, posterior futures, the horizon horizonPhi_H (how the operational
+    layer consults Phi: the next enabled actions given a history H), the
+    instruction-granularity membership (l : abar) :elem: horizonPhi_H, and an
+    episodicity predicate. Defines how Phi is CONSUMED; mordor is the oracle that
+    PRODUCES concrete Phi. Depends only on Core. (Episodic stack layer 3;
+    AFP-capable.)
+  \<close>
+  options [timeout = 600]
+  theories
+    EventStruct
