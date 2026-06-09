@@ -1,0 +1,13 @@
+chapter AFP
+
+session MemSem = Core +
+  description \<open>
+    MemSem: the thin SMRD memory semantics -- program state
+    sigma = (viswrite, memory, phi, RF) and per-action effects. No coherence
+    machinery; ordering is delegated to Phi. (Episodic stack layer 2; AFP-capable.)
+    The legacy PSem.thy / OpSem_definite.thy in this directory are superseded and
+    not part of this session.
+  \<close>
+  options [timeout = 600]
+  theories
+    MemSem

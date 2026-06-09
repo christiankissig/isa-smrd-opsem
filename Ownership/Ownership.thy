@@ -23,7 +23,7 @@
 *)
 
 theory Ownership
-  imports OwickiGries
+  imports "OwickiGries.OwickiGries"
 begin
 
 section \<open>The ownership-system locale\<close>

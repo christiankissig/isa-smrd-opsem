@@ -22,9 +22,10 @@ status.
 
 | Layer / session | State |
 |---|---|
-| **OwickiGries + Ownership** (Track A — first AFP target) | ✅ **proven**, zero `sorry`, builds without `quick_and_dirty` |
+| **OwickiGries + Ownership** (Track A — first AFP target) | ✅ **proven**, zero `sorry`, builds without `quick_and_dirty` (proper two-entry sessions) |
 | **Core** (labels, actions, commands, digest) | ✅ built, zero `sorry` |
-| MemSem · EventStruct · OpSem (Episodic stack) | ⏳ to do (unblocked) |
+| **MemSem** (thin SMRD σ + action effects) | ✅ built, zero `sorry` |
+| EventStruct · OpSem (Episodic stack) | ⏳ to do (unblocked) |
 | `Φ_RCU` generation (mordor bridge) | ⏳ in progress (the schedule long-pole) |
 | Legacy RCU proofs (`MRD_C11_RCU`) | 🗄️ retained, mostly `sorry`/superseded — being replaced layer by layer |
 
@@ -59,32 +60,37 @@ fork) with a built `HOL` heap (`isabelle build -b HOL`). Theory sources use ASCI
 symbol notation (`\<forall>`, `\<open>…\<close>`), not raw Unicode glyphs.
 
 ```bash
-make all        # build the reworked layers: Core + Track A  (no quick_and_dirty)
-make core       # the Core session
-make track-a    # Track A = OwickiGries + Ownership (the first AFP target)
-make gate       # from-CLEAN rebuild of Core + Track A — the zero-sorry AFP gate
+make all        # build all reworked layers: Core, MemSem, OwickiGries, Ownership
+make core       # Core         (shared vocabulary)
+make memsem     # MemSem        (thin SMRD memory semantics; needs Core)
+make og         # OwickiGries
+make ownership  # Ownership     (needs OwickiGries); alias: make track-a
+make gate       # from-CLEAN rebuild of all layers — the zero-sorry AFP gate
 make rcu        # the legacy MRD_C11_RCU session (quick_and_dirty)
-make dry        # confirm Core + Track A are up to date (no recompile)
+make dry        # confirm the reworked layers are up to date (no recompile)
 make clean      # remove editor backups / autosaves
 make help       # list targets
 ```
 
 Override the prover binary with `make ISABELLE=/path/to/isabelle <target>`.
 
-Equivalent raw invocations: `isabelle build -d Core Core`,
-`isabelle build -d TrackA Track_A`,
+Each layer is its own session; cross-layer imports use session-qualified theory
+names (e.g. `imports "Core.Core"`). Equivalent raw invocations:
+`isabelle build -d Core Core`,
+`isabelle build -d Core -d MemSem MemSem`,
+`isabelle build -d OwickiGries -d Ownership Ownership`,
 `isabelle build -o quick_and_dirty=true -D . -d c11_opsem MRD_C11_RCU`.
 
 ## Repository layout
 
 ```
 Core/            ★ shared vocabulary (Core.thy + ROOT)             [built]
-MemSem/          ★ memory semantics (currently legacy PSem/OpSem_definite)
+MemSem/          ★ thin SMRD memory semantics (MemSem.thy + ROOT)  [built]
+                   (legacy PSem.thy / OpSem_definite.thy retained, not in session)
 EventStruct/     ★ event-structure semantics (scaffolding)
 OpSem/           ★ Episodic operational semantics (scaffolding)
 OwickiGries/     ★ generic Owicki-Gries framework (proven) + ROOT
 Ownership/       ★ ownership instantiation (proven) + ROOT
-TrackA/ROOT        combined verification session for OwickiGries + Ownership
 clients/RCU/       the existing RCU_*.thy (pre-rework client; being replaced)
 clients/UAF_Bug/   minimal use-after-free example (paper's headline)
 c11_opsem/         base C11 memory model (formerly a git submodule; now in-tree)

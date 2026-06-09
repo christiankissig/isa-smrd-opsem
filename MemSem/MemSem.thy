@@ -1,0 +1,157 @@
+(*  Title:      MemSem/MemSem.thy
+    Author:     RCU-C11-OpSem project (Episodic stack, layer 2: MemSem)
+
+    The thin SMRD memory semantics: the paper's program state
+    sigma = (viswrite, memory, phi, RF) and the per-action effect sigma ~>_t sigma'.
+
+    Per docs/SPIKE_C_smrd_memsem.md (and REWORK_PLAN sec 2): this is a REPLACEMENT
+    for the surrey RC11 model, not a relaxation.  MemSem carries NO coherence
+    machinery -- no timestamps, modification order, per-thread views, visible-writes
+    -by-timestamp, release/acquire view-merge, or `covered`.  ALL ordering (incl.
+    release/acquire synchronisation) is delegated to Phi (ppo u DP) in the
+    EventStruct/OpSem layers.  Memory orders survive ON actions (inputs to Phi) but
+    have no view-merge effect here.  This makes the memory layer memory-model
+    agnostic: SMRD-vs-RC11 is a property of Phi alone (Spike C, Q5).
+
+    Depends only on Core.  PSem's allocation discipline is folded in as `memory` +
+    phi-disjointness; OpSem_definite is retired (both legacy files in this dir are
+    superseded and not imported here).
+
+    Representation choices (documented deviations, both pragmatic & noted):
+    - phi is modelled SHALLOWLY as the set of admissible symbolic valuations
+      (env set): TRUE = UNIV, conjunction = intersection, satisfiable = nonempty,
+      x ==_phi y iff all admissible valuations agree.  This is the "constraint
+      accumulator" of Spike C without committing to a syntactic formula datatype.
+    - The per-loop restriction sigma|^t_{\\ell} for the `lb` reset (Spike C, Q2's
+      iteration-indexed phi) is DEFERRED: it is an OpSem concern that must be
+      designed together with the `lb` rule and the (Phi_RCU-gated) iteration order,
+      mirroring Core's deferred linorder.  MemSem here gives the action effects and
+      their local invariants.
+*)
+
+theory MemSem
+  imports "Core.Core"
+begin
+
+section \<open>Symbolic valuations and expression evaluation\<close>
+
+text \<open>A valuation assigns a concrete value to each symbol (read value-symbol or
+  symbolic location).  Expression evaluation is over symbols and literals; at the
+  action level expressions are register-free and deref-free (OpSem substitutes
+  registers and resolves derefs before emitting actions), so @{term EReg}/@{term
+  EDeref} take a degenerate value here.\<close>
+
+type_synonym env = "sym \<Rightarrow> valu"
+
+fun evalE :: "env \<Rightarrow> expr \<Rightarrow> valu" where
+  "evalE e (EInt n)   = n"
+| "evalE e (ESym s)   = e s"
+| "evalE e (EReg _)   = 0"
+| "evalE e (EDeref _) = 0"
+| "evalE e (EAdd a b) = evalE e a + evalE e b"
+| "evalE e (ESub a b) = evalE e a - evalE e b"
+| "evalE e (EMul a b) = evalE e a * evalE e b"
+| "evalE e (EDiv a b) = evalE e a div evalE e b"
+| "evalE e (EEq a b)  = (if evalE e a = evalE e b then 1 else 0)"
+| "evalE e (ELeq a b) = (if evalE e a \<le> evalE e b then 1 else 0)"
+| "evalE e (ENot a)   = (if evalE e a = 0 then 1 else 0)"
+| "evalE e (EAnd a b) = (if evalE e a \<noteq> 0 \<and> evalE e b \<noteq> 0 then 1 else 0)"
+| "evalE e (EOr a b)  = (if evalE e a \<noteq> 0 \<or> evalE e b \<noteq> 0 then 1 else 0)"
+
+definition holds :: "env \<Rightarrow> bexp \<Rightarrow> bool" where
+  "holds e b \<longleftrightarrow> evalE e b \<noteq> 0"
+
+
+section \<open>Writes and the program state\<close>
+
+text \<open>A visible write records the writing event-label, its location, the value
+  written, and its memory order (the order is an input to Phi, not used here).\<close>
+record write_rec =
+  w_label :: elabel
+  w_loc   :: sym
+  w_val   :: expr
+  w_order :: mem_order
+
+text \<open>The paper's program state.  @{term viswrite}: last visible write per
+  symbolic location.  @{term memory}: allocated symbols.  @{term phi}: the path
+  predicate as its set of admissible valuations.  @{term rf}: read-from edges
+  (reader event-label to writer event-label).\<close>
+record mstate =
+  viswrite :: "sym \<rightharpoonup> write_rec"
+  memory   :: "sym set"
+  phi      :: "env set"
+  rf       :: "(elabel \<times> elabel) set"
+
+definition init_mstate :: mstate where
+  "init_mstate = \<lparr> viswrite = Map.empty, memory = {}, phi = UNIV, rf = {} \<rparr>"
+
+text \<open>Symbolic-location equivalence modulo @{term phi}: @{term x} and @{term y}
+  denote the same address in every admissible valuation.\<close>
+definition sym_eq :: "mstate \<Rightarrow> sym \<Rightarrow> sym \<Rightarrow> bool" where
+  "sym_eq \<sigma> x y \<longleftrightarrow> (\<forall>e \<in> phi \<sigma>. e x = e y)"
+
+definition satisfiable :: "mstate \<Rightarrow> bool" where
+  "satisfiable \<sigma> \<longleftrightarrow> phi \<sigma> \<noteq> {}"
+
+
+section \<open>Per-action effects  sigma ~>_t sigma'\<close>
+
+text \<open>Conjoin a constraint into the path predicate (intersection of admissible
+  valuations).\<close>
+definition conj_phi :: "(env \<Rightarrow> bool) \<Rightarrow> mstate \<Rightarrow> env set" where
+  "conj_phi P \<sigma> = phi \<sigma> \<inter> {e. P e}"
+
+text \<open>The thin effect of one labelled action (no coherence/views):
+  \<^item> a read extends @{term rf} with the visible write and conjoins the rf
+    value-equality @{text "alpha = val(viswrite x)"} into @{term phi};
+  \<^item> a write updates the last visible write at its location;
+  \<^item> an alloc adds a fresh symbol, conjoining its disjointness from the
+    already-allocated symbols into @{term phi};
+  \<^item> a dealloc removes the symbol;
+  \<^item> a branch conjoins its guard;
+  \<^item> a fence is a no-op.
+  The memory order on read/write/fence has NO effect here (Spike C, Q4): its
+  synchronisation is a ppo fact in Phi, and a failing CAS's acquire-only-ness shows
+  up only as the ABSENCE of a release write, hence a missing ppo edge.\<close>
+fun apply_action :: "elabel \<Rightarrow> action \<Rightarrow> mstate \<Rightarrow> mstate" where
+  "apply_action l (Read ord x a) \<sigma> =
+     (case viswrite \<sigma> x of
+        None   \<Rightarrow> \<sigma>
+      | Some w \<Rightarrow> \<sigma>\<lparr> rf  := rf \<sigma> \<union> {(l, w_label w)},
+                      phi := conj_phi (\<lambda>e. e a = evalE e (w_val w)) \<sigma> \<rparr>)"
+| "apply_action l (Write ord x ev) \<sigma> =
+     \<sigma>\<lparr> viswrite := (viswrite \<sigma>)(x \<mapsto> \<lparr> w_label = l, w_loc = x, w_val = ev, w_order = ord \<rparr>) \<rparr>"
+| "apply_action l (Branch b) \<sigma> =
+     \<sigma>\<lparr> phi := conj_phi (\<lambda>e. evalE e b \<noteq> 0) \<sigma> \<rparr>"
+| "apply_action l (Fence ord) \<sigma> = \<sigma>"
+| "apply_action l (AllocA x v) \<sigma> =
+     \<sigma>\<lparr> memory := insert x (memory \<sigma>),
+        phi := conj_phi (\<lambda>e. \<forall>y \<in> memory \<sigma>. e x \<noteq> e y) \<sigma> \<rparr>"
+| "apply_action l (DeallocA x) \<sigma> = \<sigma>\<lparr> memory := memory \<sigma> - {x} \<rparr>"
+
+
+section \<open>Well-formedness and local soundness (Spike C, Q5-local)\<close>
+
+text \<open>The MemSem invariant: every visible-write record sits at its own location.\<close>
+definition wf_mstate :: "mstate \<Rightarrow> bool" where
+  "wf_mstate \<sigma> \<longleftrightarrow> (\<forall>x w. viswrite \<sigma> x = Some w \<longrightarrow> w_loc w = x)"
+
+lemma wf_init: "wf_mstate init_mstate"
+  by (simp add: wf_mstate_def init_mstate_def)
+
+lemma wf_apply_action: "wf_mstate \<sigma> \<Longrightarrow> wf_mstate (apply_action l a \<sigma>)"
+  by (cases a) (auto simp: wf_mstate_def conj_phi_def split: option.splits)
+
+text \<open>The path predicate only ever TIGHTENS: an action adds constraints, it never
+  admits new valuations.  (Hence impossible paths stay pruned -- Spike C, Q5.)\<close>
+lemma phi_mono: "phi (apply_action l a \<sigma>) \<subseteq> phi \<sigma>"
+  by (cases a) (auto simp: conj_phi_def split: option.splits)
+
+lemma satisfiable_init: "satisfiable init_mstate"
+  by (simp add: satisfiable_def init_mstate_def)
+
+text \<open>Reads only grow @{term rf}; a read-from edge is never retracted.\<close>
+lemma rf_mono: "rf \<sigma> \<subseteq> rf (apply_action l a \<sigma>)"
+  by (cases a) (auto split: option.splits)
+
+end

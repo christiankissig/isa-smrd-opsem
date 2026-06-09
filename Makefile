@@ -1,48 +1,61 @@
 # Makefile for rcu-c11-opsem
 #
-# Requires Isabelle2025-vsce (the isabelle-emacs fork). Override the prover
-# binary with e.g.  make ISABELLE=/path/to/isabelle core
+# Requires Isabelle2025-vsce (the isabelle-emacs fork) for interactive work, but
+# the reworked layers also build on the OFFICIAL Isabelle2025 (see CI). Override
+# the prover binary with e.g.  make ISABELLE=/path/to/isabelle core
 #
-# The reworked layers (Core, Track A) build with NO quick_and_dirty -- that is
-# the real Archive-of-Formal-Proofs gate (zero sorry, builds from clean). The
-# legacy RCU development (MRD_C11_RCU) still needs quick_and_dirty and is built
-# by the `rcu` target.
+# The reworked layers build with NO quick_and_dirty -- that is the real
+# Archive-of-Formal-Proofs gate (zero sorry, builds from clean). They are proper
+# per-layer Isabelle sessions; cross-layer imports use session-qualified theory
+# names (e.g. `imports "Core.Core"`). The legacy RCU development (MRD_C11_RCU)
+# still needs quick_and_dirty and is built by the `rcu` target.
 
 ISABELLE ?= isabelle
 
+# All reworked-layer session directories (registered for every build; the target
+# session selects what is actually built, with dependencies built automatically).
+DIRS := -d Core -d MemSem -d OwickiGries -d Ownership
+
 .DEFAULT_GOAL := help
 
-.PHONY: help all core track-a og ownership gate rcu legacy dry clean
+.PHONY: help all core memsem eventstruct opsem og ownership track-a gate rcu legacy dry clean
 
 help:
 	@echo "rcu-c11-opsem -- Isabelle build targets"
 	@echo
-	@echo "  make all        build the reworked layers: Core + Track A (no quick_and_dirty)"
-	@echo "  make core       build the Core session (shared vocabulary; AFP layer 1)"
-	@echo "  make track-a    build Track A = OwickiGries + Ownership (first AFP target)"
-	@echo "  make gate       from-CLEAN rebuild of Core + Track A -- the zero-sorry AFP gate"
-	@echo "  make rcu        build the legacy MRD_C11_RCU session (quick_and_dirty)"
-	@echo "  make dry        confirm Core + Track A are up to date (isabelle build -n)"
+	@echo "  make all        build all reworked layers (Core, MemSem, OwickiGries, Ownership)"
+	@echo "  make core       Core      -- shared vocabulary (AFP layer 1)"
+	@echo "  make memsem     MemSem     -- thin SMRD memory semantics (layer 2; needs Core)"
+	@echo "  make og         OwickiGries -- generic Owicki-Gries framework"
+	@echo "  make ownership  Ownership  -- ownership instantiation (needs OwickiGries); alias: track-a"
+	@echo "  make gate       from-CLEAN rebuild of all layers -- the zero-sorry AFP gate"
+	@echo "  make rcu        legacy MRD_C11_RCU session (quick_and_dirty)"
+	@echo "  make dry        confirm the reworked layers are up to date (isabelle build -n)"
 	@echo "  make clean      remove editor backups / autosaves / .marks sidecars"
 	@echo
 	@echo "  Override the prover:  make ISABELLE=/path/to/isabelle <target>"
 
-# --- reworked, AFP-bound layers (Episodic stack) ------------------------------
+# --- reworked, AFP-bound layers (Episodic stack + the OG/Ownership vertical) ---
 
-all: core track-a
+all:
+	$(ISABELLE) build $(DIRS) Core MemSem OwickiGries Ownership
 
 core:
-	$(ISABELLE) build -d Core Core
+	$(ISABELLE) build $(DIRS) Core
 
-# OwickiGries + Ownership are verified together via the combined Track_A session
-# (a single, valid AFP-entry structure). `og`/`ownership` are aliases.
-track-a og ownership:
-	$(ISABELLE) build -d TrackA Track_A
+memsem:
+	$(ISABELLE) build $(DIRS) MemSem
+
+og:
+	$(ISABELLE) build $(DIRS) OwickiGries
+
+# Ownership pulls in OwickiGries; `track-a` is kept as an alias.
+ownership track-a:
+	$(ISABELLE) build $(DIRS) Ownership
 
 # Enforce the actual acceptance gate: clean build, no quick_and_dirty, zero sorry.
 gate:
-	$(ISABELLE) build -c -d Core Core
-	$(ISABELLE) build -c -d TrackA Track_A
+	$(ISABELLE) build -c $(DIRS) Core MemSem OwickiGries Ownership
 
 # --- legacy RCU development ---------------------------------------------------
 
@@ -54,7 +67,7 @@ rcu legacy:
 # Confirm the reworked sessions are up to date without recompiling
 # (`-n` reuses existing build databases, so it needs them built first).
 dry:
-	$(ISABELLE) build -n -d Core -d TrackA Core Track_A
+	$(ISABELLE) build -n $(DIRS) Core MemSem OwickiGries Ownership
 
 clean:
 	@find . -path ./.git -prune -o -type f \
