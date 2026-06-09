@@ -1,0 +1,19 @@
+chapter AFP
+
+session OpSem = MemSem +
+  description \<open>
+    OpSem-min (Episodic stack layer 4, milestone 3a): the command/effect bridge,
+    the operational configuration (sigma, rho, H), and the inductive future-stepping
+    relation `step prog Phi` with the NON-LOOP rules only -- the non-branch step and
+    the then/else branch rules.  NO `lb`-reset rule and NO episodicity machinery
+    (that is milestone 3b / W8b, RCU-only).  A client locale `fixes prog Phi` plus a
+    `reachable` predicate (reflexive-transitive closure of `step` from an initial
+    config).  Sufficient for the loop-free UAF client (the fast validation route).
+    Imports MemSem (sigma + action effects) and EventStruct (Phi + horizon).
+    (Episodic stack layer 4; AFP-capable.)
+  \<close>
+  options [timeout = 600]
+  sessions
+    "EventStruct"
+  theories
+    OpSem
