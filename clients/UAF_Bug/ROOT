@@ -1,0 +1,31 @@
+chapter AFP
+
+session UAF_Bug = OpSem +
+  description \<open>
+    Client: the paper's minimal 2-thread use-after-free example (uaf-bug.lit /
+    uaf-bug-fixed.lit), instantiated against the Episodic OpSem stack (W9 / Phase 4,
+    the fast end-to-end validation).
+
+    Defines `prog_uaf_bug` / `prog_uaf_fixed` as Core-typed labelled `command` data
+    and `Phi_uaf` / `Phi_uaf_fixed` as EventStruct `Phi` (edge-sets over `elabel`,
+    adapted faithfully from the mordor-rendered generated digest).  The ONLY
+    semantic difference between bug and fixed is the exit write's `mem_order`
+    (relaxed vs `rel`) and hence the presence of the deref->exit ppo edge in Phi.
+
+    States and proves (via the `opsem_client` locale): the UAF is REACHABLE in the
+    buggy program (a `reachable` config has `Dealloc rC` enabled while T1's deref
+    `Read rC` is still pending) and EXCLUDED in the fixed program (the release edge
+    keeps the free out of the horizon until the deref has committed) -- matching the
+    paper's `tab-fut-step-bug` / `-fix`.
+
+    Imports OpSem (the non-loop `step` / `reachable` / `opsem_client` locale),
+    session-qualified.
+  \<close>
+  options [timeout = 1200]
+  sessions
+    "Core"
+    "MemSem"
+    "EventStruct"
+    "OpSem"
+  theories
+    UAF_Bug
