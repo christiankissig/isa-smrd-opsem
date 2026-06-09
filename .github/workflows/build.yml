@@ -1,0 +1,66 @@
+name: build
+
+# Build the reworked, AFP-bound layers (Core + Track A = OwickiGries + Ownership)
+# against the OFFICIAL Isabelle distribution -- NOT the isabelle-emacs / -vsce fork
+# used for interactive development. A green run is the zero-sorry gate: the layers
+# build from clean, without quick_and_dirty, on a stock prover.
+#
+# The legacy MRD_C11_RCU session is intentionally NOT built here: it is work in
+# progress (sorry'd proofs, requires quick_and_dirty) and targets the fork.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Official Isabelle release. Bump the version here to upgrade.
+  ISABELLE_VERSION: Isabelle2025
+
+jobs:
+  isabelle-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Isabelle distribution
+        id: cache-dist
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ISABELLE_VERSION }}
+          key: dist-${{ env.ISABELLE_VERSION }}-${{ runner.os }}
+
+      - name: Download official Isabelle
+        if: steps.cache-dist.outputs.cache-hit != 'true'
+        run: |
+          # Per-release archived URL (stable). Current release also at
+          #   https://isabelle.in.tum.de/dist/${ISABELLE_VERSION}_linux.tar.gz
+          url="https://isabelle.in.tum.de/website-${ISABELLE_VERSION}/dist/${ISABELLE_VERSION}_linux.tar.gz"
+          echo "Downloading $url"
+          curl -fsSL "$url" -o isabelle.tar.gz
+          tar xzf isabelle.tar.gz
+          rm isabelle.tar.gz
+
+      - name: Put Isabelle on PATH
+        run: echo "${GITHUB_WORKSPACE}/${ISABELLE_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Show prover version
+        run: isabelle version
+
+      - name: Cache Isabelle heaps (HOL, HOL-Library, sessions)
+        uses: actions/cache@v4
+        with:
+          path: ~/.isabelle
+          # ROOT/source hash for freshness; restore-keys reuses the prior heaps
+          # (HOL + HOL-Library) so only changed sessions rebuild.
+          key: heaps-${{ env.ISABELLE_VERSION }}-${{ runner.os }}-${{ hashFiles('**/ROOT', '**/*.thy') }}
+          restore-keys: |
+            heaps-${{ env.ISABELLE_VERSION }}-${{ runner.os }}-
+
+      - name: Build Core + Track A (no quick_and_dirty)
+        run: make all
