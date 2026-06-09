@@ -37,6 +37,24 @@ text \<open>Who owns an instruction: the thread-less init/preamble (mordor @{tex
   or a thread.\<close>
 datatype owner = Init | Thr tid
 
+text \<open>Rank an owner: @{term Init} before all threads, threads by tid.  This is also
+  the canonical linear order on owners (@{term Init} @{text "<"} all @{term Thr},
+  threads by @{typ tid}).\<close>
+fun owner_rank :: "owner \<Rightarrow> nat" where
+  "owner_rank Init    = 0"
+| "owner_rank (Thr t) = Suc t"
+
+lemma owner_rank_inj: "owner_rank a = owner_rank b \<Longrightarrow> a = b"
+  by (cases a; cases b) auto
+
+instantiation owner :: linorder
+begin
+definition "less_eq_owner a b \<longleftrightarrow> owner_rank a \<le> owner_rank b"
+definition "less_owner a b \<longleftrightarrow> owner_rank a < owner_rank b"
+instance
+  by intro_classes (auto simp: less_eq_owner_def less_owner_def owner_rank_inj)
+end
+
 text \<open>Static instruction-label = the digest key.  @{text ilo_loops} lists the
   enclosing loops, innermost LAST (empty outside loops).\<close>
 record iloc =
@@ -61,6 +79,52 @@ definition loopfun :: "elabel \<Rightarrow> loopid list" where
 
 definition iterf :: "elabel \<Rightarrow> loopid \<rightharpoonup> iter" where
   "iterf l = map_of (zip (ilo_loops (el_iloc l)) (el_iters l))"
+
+
+subsection \<open>Canonical linear order on labels\<close>
+
+text \<open>A self-contained @{class linorder} on the label types, so that downstream
+  layers may form sorted lists, @{term Max}, and label sets.  The order key sorts
+  by @{term owner_rank} first (@{term Init} before threads), then the syntactic
+  loop nesting / iteration vector / position fields.  This is the CANONICAL order;
+  the program-FAITHFUL order (where outer-loop iteration dominates inner-loop
+  position, keyed by the static @{text hdr} table) is @{term elabel_lt} below.
+
+  Records are tuples under a hidden polymorphic ``more'' slot, so the instance is
+  declared on the @{text "_ext"} type constructor; @{typ iloc} = @{text "unit
+  iloc_ext"} and @{typ elabel} = @{text "unit elabel_ext"} inherit it.\<close>
+
+definition iloc_key :: "'a iloc_scheme \<Rightarrow> owner \<times> nat \<times> loopid list \<times> 'a" where
+  "iloc_key r = (ilo_owner r, ilo_seq r, ilo_loops r, iloc.more r)"
+
+lemma iloc_key_inj: "iloc_key x = iloc_key y \<Longrightarrow> x = y"
+  by (rule iloc.equality) (simp_all add: iloc_key_def)
+
+instantiation iloc_ext :: (linorder) linorder
+begin
+definition "less_eq_iloc_ext (a::'a iloc_ext) b \<longleftrightarrow> iloc_key a \<le> iloc_key b"
+definition "less_iloc_ext (a::'a iloc_ext) b \<longleftrightarrow> iloc_key a < iloc_key b"
+instance
+  by intro_classes
+     (auto simp: less_eq_iloc_ext_def less_iloc_ext_def less_le_not_le
+                 iloc_key_inj order_trans antisym)
+end
+
+definition elabel_key :: "'a elabel_scheme \<Rightarrow> iloc \<times> iter list \<times> nat \<times> 'a" where
+  "elabel_key r = (el_iloc r, el_iters r, el_k r, elabel.more r)"
+
+lemma elabel_key_inj: "elabel_key x = elabel_key y \<Longrightarrow> x = y"
+  by (rule elabel.equality) (simp_all add: elabel_key_def)
+
+instantiation elabel_ext :: (linorder) linorder
+begin
+definition "less_eq_elabel_ext (a::'a elabel_ext) b \<longleftrightarrow> elabel_key a \<le> elabel_key b"
+definition "less_elabel_ext (a::'a elabel_ext) b \<longleftrightarrow> elabel_key a < elabel_key b"
+instance
+  by intro_classes
+     (auto simp: less_eq_elabel_ext_def less_elabel_ext_def less_le_not_le
+                 elabel_key_inj order_trans antisym)
+end
 
 
 section \<open>Memory orders, registers, values, expressions\<close>
@@ -144,8 +208,10 @@ definition prog :: "program \<Rightarrow> owner \<Rightarrow> iloc \<rightharpoo
                  (filter (\<lambda>i. ilo_owner (instr_loc i) = own) P))"
 
 text \<open>The readable digest constructor @{text "LABEL is INSTRUCTION"}.  (Spike B
-  residual 1: the "is" keyword is checked here to parse as an inner-syntax mixfix
-  delimiter; the @{text "\<triangleq>"} fallback is kept ready.)\<close>
+  residual 1, RESOLVED: the @{text "is"} mixfix delimiter parses cleanly in batch
+  -- Isar's @{text "is"} is a command-level term-abbreviation keyword, not inner
+  term syntax, so it does NOT clash.  The @{text "\<triangleq>"} fallback proved
+  unnecessary.)\<close>
 definition is_entry :: "iloc \<Rightarrow> command \<Rightarrow> instr"  ("(_ is/ _)" [61, 60] 60)
   where "is_entry l c = Instr l c"
 
@@ -161,22 +227,20 @@ text \<open>The paper orders labels lexicographically over loop indices to detec
   projection here; @{term okey} is parameterised by the static @{text hdr} table
   (loop-id to its @{text While} header @{text seq}) extracted once from a digest.
 
-  NOTE (Core scope): the @{text "elabel :: linorder"} typeclass instance is
-  deliberately DEFERRED.  A global instance would have to fix one order for the
-  whole type, but faithfulness for NESTED loops (outer-iteration dominates inner)
-  is unvalidated until the first RCU @{text Phi} exists (Spike B residual 2,
-  Phi_RCU-gated).  Downstream uses the explicit @{term okey}/@{term elabel_lt}
-  below, which carry the @{text hdr} table.\<close>
+  Two orders coexist by design.  The CANONICAL @{class linorder} on @{typ elabel}
+  (above, by @{term elabel_key}) is @{text hdr}-free, total, and good enough for
+  sorted lists / @{term Max} / set machinery downstream.  The program-FAITHFUL
+  order @{term elabel_lt} below threads the static @{text hdr} table so that an
+  OUTER loop's iteration dominates an inner loop's position (the property the
+  @{text lb} rule needs); its faithfulness for NESTED loops is unvalidated until
+  the first RCU @{text Phi} exists (Spike B residual 2, Phi_RCU-gated), which is
+  precisely why it stays a parameterised predicate rather than the typeclass
+  order.\<close>
 
 definition okey :: "(loopid \<Rightarrow> nat) \<Rightarrow> elabel \<Rightarrow> (nat \<times> nat) list" where
   "okey hdr l =
      map (\<lambda>(lp, i). (hdr lp, i)) (zip (rev (ilo_loops (el_iloc l))) (rev (el_iters l)))
      @ [(ilo_seq (el_iloc l), el_k l)]"
-
-text \<open>Rank an owner: @{term Init} before all threads, threads by tid.\<close>
-fun owner_rank :: "owner \<Rightarrow> nat" where
-  "owner_rank Init    = 0"
-| "owner_rank (Thr t) = Suc t"
 
 text \<open>The program-relative strict order on event-labels: lexicographic on
   @{term "(owner_rank, okey hdr)"}.\<close>
