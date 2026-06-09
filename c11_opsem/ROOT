@@ -1,0 +1,10 @@
+session MRD_C11_OPSEM = "HOL" +
+  theories
+    LB
+    LBDataAddCtrl
+    OpSem
+    OpSem_Proof_Rules
+    PartialConditional
+    RNG
+    SimpleLBDataAddCtrl
+  export_files "./mrd_opsem/"
