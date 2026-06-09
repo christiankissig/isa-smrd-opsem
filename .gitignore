@@ -5,3 +5,6 @@
 *.log
 *.pdf
 *.aux
+__pycache__/
+.claude/
+workspace/scratch/
