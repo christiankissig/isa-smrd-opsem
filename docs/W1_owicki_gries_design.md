@@ -1,6 +1,24 @@
 # W1 — Generic Owicki-Gries + Ownership (Track A, first AFP target)
 
-**Status:** design + skeleton theories (WIP, proofs `sorry`'d).
+**Status:** ✅ **complete (2026-06-09)** — all proofs discharged; `OwickiGries` and
+`Ownership` build with **zero `sorry` and without `quick_and_dirty`** (the AFP gate).
+Verification session `Track_A` (`TrackA/ROOT`) builds both together in ~3s; standalone
+per-entry ROOTs (`OwickiGries/ROOT`, `Ownership/ROOT`) retained for the two-entry AFP split.
+
+Three skeleton corrections were required during the proof phase (each a real soundness/type
+fix, not a workaround):
+1. **`OwickiGries` post-erasure.** `ann_step` erased postconditions to `ASkip UNIV` (in the
+   `ABasic`/`AWhileF` rules), making the safety invariant non-inductive. Fixed by carrying the
+   post: `ABasic "'s set" 'act "'s set"` steps to `ASkip post`, and `AWhileF` to `ASkip (P ∩ -b)`
+   with that exit assertion recorded in `assertions` (so interference-freedom covers it).
+2. **`owned_outline` type.** Declared `'p ⇒ ann ⇒ bool` but used with a postcondition argument;
+   corrected to `'p ⇒ ann ⇒ 's set ⇒ bool`.
+3. **OG-index ↔ ownership-process bridge.** `ownership_interference_free` conflated the OG thread
+   index (`nat`) with the process tag (`'p`). It now takes an explicit injective index→process
+   map `proc :: nat ⇒ 'p` plus the well-tagging discipline (thread `i`'s atoms carry `proc i`);
+   the RCU client supplies `proc`.
+
+Original design follows.
 **Scope:** REWORK_PLAN.md §1 (the independent OG+Ownership vertical), §3 (AFP
 requirements + decoupling), Decision 7, Phase 5, Risk 6.
 

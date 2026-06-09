@@ -1,0 +1,14 @@
+chapter AFP
+
+session Core = HOL +
+  description \<open>
+    Core: shared vocabulary for the Episodic-Loops operational semantics --
+    labels (pc, loopfun, iter), memory orders, expressions, the abstract action
+    alphabet, the abstract command language, and the digested program. No
+    semantics. Depends only on HOL. (Episodic stack layer 1; AFP-capable.)
+  \<close>
+  options [timeout = 600]
+  sessions
+    "HOL-Library"
+  theories
+    Core

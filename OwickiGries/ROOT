@@ -1,0 +1,11 @@
+chapter AFP
+
+session OwickiGries = HOL +
+  description \<open>
+    A generic Owicki-Gries / rely-guarantee program logic over an abstract
+    transition system. Depends only on HOL, decoupled from the Episodic OpSem
+    stack (Track A, first AFP target). See docs/W1_owicki_gries_design.md.
+  \<close>
+  options [timeout = 1200]
+  theories
+    OwickiGries
