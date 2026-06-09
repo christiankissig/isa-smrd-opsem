@@ -134,7 +134,7 @@ lemma NotOwns_own_stable: "own_stable p (NotOwns p r)"
 
 text \<open>If every assertion of thread @{text j}'s outline is owned by @{text j},
   then the Owicki-Gries interference-freedom obligation holds by construction.
-  This is the reusable "ownership disjointness \<Longrightarrow> non-interference".\<close>
+  This is the reusable "ownership disjointness implies non-interference".\<close>
 
 definition owned_outline ::
   "'p \<Rightarrow> ('p \<times> 'act, 's) ann \<Rightarrow> 's set \<Rightarrow> bool" where

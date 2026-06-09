@@ -11,3 +11,5 @@ session Ownership = OwickiGries +
   options [timeout = 1200]
   theories
     Ownership
+  document_files
+    "root.tex"

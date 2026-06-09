@@ -1,0 +1,43 @@
+# AFP submission metadata stub for the `Ownership` entry.
+#
+# This is NOT consumed by `isabelle build`; it is a ready-to-paste record of the
+# fields the AFP `metadata/metadata` TOML expects (see
+# https://www.isa-afp.org/help/ and the AFP submission guidelines). Fill in the
+# author/email/date when submitting.
+#
+# NOTE on the two-entry split: this entry imports its sibling via the
+# session-qualified theory name `OwickiGries.OwickiGries`, so the AFP entry
+# `Ownership` depends on the AFP entry `OwickiGries`. Record that dependency in
+# the AFP tooling (it is inferred from the session ROOT's `session Ownership =
+# OwickiGries + ...`).
+
+[entries.Ownership]
+title = "Ownership: an Instantiation of the Generic Owicki-Gries Logic, with Use-After-Free Safety"
+date = "TODO-YYYY-MM-DD"            # submission date
+topics = [
+  "Computer science/Concurrency",
+  "Computer science/Programming languages/Logics",
+]
+abstract = """
+A concrete instantiation of the generic Owicki-Gries logic (AFP entry
+OwickiGries). Actions are tagged with the acting process and the abstract state
+carries an ownership map. A three-rule transfer discipline (locality,
+footprint, fresh acquisition) fixes how actions move ownership, abstracting the
+rules of a read-copy-update (RCU) algorithm. From it we prove an exclusivity
+invariant and its preservation under reachability, the reusable result that
+ownership disjointness discharges interference-freedom, and a use-after-free
+safety corollary: the configuration co-enabling a free with a still-pending
+dereference of the same resource is unreachable. Depends only on the sibling
+OwickiGries entry.
+"""
+license = "bsd"                     # AFP licenses: "bsd" or "lgpl"
+
+[entries.Ownership.authors]
+# author = ["<author-id>"]
+
+[entries.Ownership.notify]
+# author = ["<author-id>"]
+
+[entries.Ownership.related]
+# dois = []
+# pubs = []

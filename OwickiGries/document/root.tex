@@ -1,0 +1,55 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage{isabelle,isabellesym}
+
+\usepackage{amssymb}
+
+% this should be the last package used
+\usepackage{pdfsetup}
+
+% urls in roman style, theory text in italics
+\urlstyle{rm}
+\isabellestyle{it}
+
+\begin{document}
+
+\title{A Generic Owicki--Gries Logic over an Abstract Transition System}
+\author{RCU-C11-OpSem project}
+\maketitle
+
+\begin{abstract}
+  We formalise a generic Owicki--Gries program logic for shared-variable
+  concurrency, parameterised over a fully abstract atomic-step relation
+  $\mathit{astep} :: \mathit{'act} \Rightarrow \mathit{'s} \Rightarrow
+  \mathit{'s} \Rightarrow \mathit{bool}$.  The step relation is an arbitrary
+  binary relation over an abstract state type: it is \emph{not} assumed to be
+  total, deterministic, or always enabled.  This deliberate weakness lets a
+  non-deterministic, guarded, history-dependent operational semantics
+  (e.g.\ a weak-memory operational semantics) interpret the framework later,
+  without reopening this entry.
+
+  The development provides a small structured command language, sequential and
+  parallel (interleaving) small-step semantics, shallow ($\mathit{'s\ set}$)
+  assertions, annotated proof outlines, partial-correctness local correctness,
+  and the Owicki--Gries interference-freedom side condition.  The two main
+  results are a \emph{safety} theorem --- the assertion network is an inductive
+  invariant, so every reachable configuration satisfies every thread's current
+  precondition --- and a \emph{partial-correctness} corollary obtained from it
+  via a strip-simulation between the annotated and bare interleaving semantics.
+
+  All obligations are in partial-correctness shape
+  ($\forall s'.\ \mathit{astep}\ a\ s\ s' \longrightarrow \ldots$), which is
+  vacuously satisfied for blocked actions.  The development is HOL-only
+  (\texttt{imports Main}).  The companion entry \emph{Ownership} instantiates
+  this framework with an ownership discipline and derives use-after-free safety.
+\end{abstract}
+
+\tableofcontents
+
+% sane default for proof documents
+\parindent 0pt\parskip 0.5ex
+
+% generated text of all theories
+\input{session}
+
+\end{document}
