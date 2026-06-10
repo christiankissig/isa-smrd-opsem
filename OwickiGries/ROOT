@@ -9,3 +9,5 @@ session OwickiGries = HOL +
   options [timeout = 1200]
   theories
     OwickiGries
+  document_files
+    "root.tex"

@@ -1,0 +1,53 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage{isabelle,isabellesym}
+
+\usepackage{amssymb}
+
+% this should be the last package used
+\usepackage{pdfsetup}
+
+% urls in roman style, theory text in italics
+\urlstyle{rm}
+\isabellestyle{it}
+
+\begin{document}
+
+\title{Ownership: an Instantiation of the Generic Owicki--Gries Logic, with
+  Use-After-Free Safety}
+\author{RCU-C11-OpSem project}
+\maketitle
+
+\begin{abstract}
+  This entry is a concrete instantiation of the generic Owicki--Gries logic
+  (AFP entry \emph{OwickiGries}).  Actions are tagged with the acting process,
+  resources have an abstract type, and the abstract state carries an
+  \emph{ownership map} assigning a set of owned resources to each process.  A
+  three-rule transfer discipline (locality, footprint, and fresh acquisition)
+  fixes how actions move ownership; it abstracts the rules of a read-copy-update
+  (RCU) algorithm --- a thread assumes ownership of freshly allocated resources,
+  gains ownership after reading the shared structure, and relinquishes it at the
+  rcu-exit / \texttt{free}.
+
+  From the discipline we prove an \emph{exclusivity} invariant (no resource is
+  owned by two processes) and its preservation under reachability.  The central
+  reusable result is that \emph{ownership disjointness discharges
+  interference-freedom}: because a foreign action leaves a process's ownership
+  untouched, every assertion tagged to another thread is automatically stable,
+  so the Owicki--Gries interference-freedom obligation holds by construction.
+  Finally we derive a \emph{use-after-free safety} corollary: the configuration
+  that co-enables a \texttt{free} with a still-pending dereference of the same
+  resource is unreachable, so the logic is stuck before witnessing the bug.
+
+  The entry depends only on its sibling \emph{OwickiGries} (no further imports).
+\end{abstract}
+
+\tableofcontents
+
+% sane default for proof documents
+\parindent 0pt\parskip 0.5ex
+
+% generated text of all theories
+\input{session}
+
+\end{document}

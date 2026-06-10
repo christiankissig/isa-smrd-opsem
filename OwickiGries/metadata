@@ -1,0 +1,36 @@
+# AFP submission metadata stub for the `OwickiGries` entry.
+#
+# This is NOT consumed by `isabelle build`; it is a ready-to-paste record of the
+# fields the AFP `metadata/metadata` TOML expects (see
+# https://www.isa-afp.org/help/ and the AFP submission guidelines). Fill in the
+# author/email/date when submitting.
+
+[entries.OwickiGries]
+title = "A Generic Owicki-Gries Logic over an Abstract Transition System"
+date = "TODO-YYYY-MM-DD"            # submission date
+topics = [
+  "Computer science/Programming languages/Logics",
+  "Computer science/Concurrency",
+]
+abstract = """
+A generic Owicki-Gries program logic for shared-variable concurrency,
+parameterised over a fully abstract atomic-step relation that is not assumed
+total, deterministic, or always enabled. Provides a structured command
+language, sequential and parallel (interleaving) small-step semantics, shallow
+assertions, annotated proof outlines, partial-correctness local correctness,
+and the interference-freedom side condition. The two main results are a safety
+theorem (the assertion network is an inductive invariant) and a
+partial-correctness corollary derived via a strip-simulation between the
+annotated and bare interleaving semantics. HOL-only (imports Main).
+"""
+license = "bsd"                     # AFP licenses: "bsd" or "lgpl"
+
+[entries.OwickiGries.authors]
+# author = ["<author-id>"]          # add author id(s) registered in metadata/authors
+
+[entries.OwickiGries.notify]
+# author = ["<author-id>"]
+
+[entries.OwickiGries.related]
+# dois = []
+# pubs = []
