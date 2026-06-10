@@ -1,9 +1,45 @@
 # Spike A — RCU mordor bridge (loops/iter validation)
 
-Date: 2026-06-07. Relates to REWORK_PLAN.md §5 (v0.2 open item: RCU loops/iter on a real retry loop).
+Date: 2026-06-07 (sc=1 on rcu-1/rcu-3); **updated 2026-06-09** (iter-labels validated on a
+minimal retry-loop fixture — see "Resolution" below).
+Relates to REWORK_PLAN.md §5 (v0.2 open item: RCU loops/iter on a real retry loop).
 
 mordor binary: `/home/christian/workspace/mordor/_build/default/cli/main.exe`
-Inputs: `programs/rcu-1.lit` (single thread), `programs/rcu-3.lit` (3 threads, `|||`-separated).
+Inputs: `programs/rcu-1.lit` (single thread), `programs/rcu-3.lit` (3 threads, `|||`-separated),
+and the local fixture `rcu-inc-loop.lit` (single-thread inc() retry loop only).
+
+## Resolution (2026-06-09): `@loop:iter` labels validated on a real RCU retry loop
+
+The README's earlier recommendation (a) — "a minimal CAS-retry fixture small enough to
+terminate at sc≥2 so a future edge lands inside the retry loop" — is **done**. Fixture
+`rcu-inc-loop.lit` is the inc() retry loop only (reclaim/sync dropped, single thread,
+`rN=1`/one node) so it stays small.
+
+- **`--step-counter 2` TERMINATES on this fixture**: 2:13 wall, peak RSS 2.0 GB, exit 0
+  (full rcu-1 at sc=2 never finished — this fixture is small enough). sc=1 produces only setup
+  events (loop body elided, 0 RF edges, nothing new).
+- **`@loop:iter` labels ARE emitted on the RCU retry loop** at sc=2. The retry loop is
+  `g.9` (`op:Do`, `loop_id 1`); its body statements `g.10..g.15` carry `loops:[1]` and their
+  events appear in future edges as `g.N@1:1#k` — including the **RMW sub-events**:
+  `g.12@1:1#1` (Faa write), `g.15@1:1#0`/`g.15@1:1#2` (Cas read/write). 18 futures, 8 distinct
+  iter-bearing endpoint labels. This is the paper's `t.<stmt>@<loop_id>:<iter>#<event>` form,
+  now exercised by RCU (not just `cas_aba`).
+- **Init-scope events DO carry iter labels** (`g.N@1:1#k`). This *resolves the earlier worry*
+  (problem #3 below) that single-thread/init-scope loops could not carry `@iter` slots — they
+  can; the `g.` prefix is orthogonal to the iter suffix.
+- **Only iter 1 appears, even at sc=2** (no `@1:2`; futures place edges *within* one
+  representative iteration + to the post-loop write `g.16#0`). This is consistent with
+  **episodicity**: the loop's dependency structure is captured by a single posterior iteration,
+  so no inter-iteration (`iter 1→iter 2`) edges are needed. The lb-reset collapses iterations
+  rather than producing cross-iteration future edges. (Q4 — "how event-labels carry iter for the
+  lb-reset" — answered: each iteration relabels; the future stays single-iteration.)
+
+Artifacts: `rcu-inc-loop.lit`, `rcu-inc-loop_isa_sc1.json` (baseline, no `@`),
+`rcu-inc-loop_isa_sc2.json` (39 KB, the validated iter-label output).
+
+---
+
+## (Original 2026-06-07 findings on rcu-1/rcu-3 follow)
 
 ## TL;DR
 

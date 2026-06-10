@@ -1,0 +1,202 @@
+{
+  "format_version": "0.1",
+  "program": "rcuincloop",
+  "orders": [ "rlx", "acq", "rel", "acq_rel", "sc" ],
+  "init": [
+    {
+      "label": "g.1",
+      "loc": [ 2, 2 ],
+      "loops": [],
+      "command": { "op": "Set", "dst": "rN", "expr": { "int": 1 } },
+      "events": []
+    },
+    {
+      "label": "g.2",
+      "loc": [ 3, 8 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rrcu", "size": { "reg": "rN" } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    },
+    {
+      "label": "g.3",
+      "loc": [ 5, 18 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "add": [ { "reg": "rrcu" }, { "int": 0 } ] },
+        "val": { "int": 0 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    },
+    {
+      "label": "g.4",
+      "loc": [ 6, 17 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rC", "size": { "int": 1 } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    },
+    {
+      "label": "g.5",
+      "loc": [ 8, 15 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "reg": "rC" },
+        "val": { "int": 0 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    },
+    {
+      "label": "g.6",
+      "loc": [ 9, 9 ],
+      "loops": [],
+      "command": { "op": "Set", "dst": "rtid", "expr": { "int": 0 } },
+      "events": []
+    },
+    {
+      "label": "g.7",
+      "loc": [ 13, 10 ],
+      "loops": [],
+      "command": { "op": "Alloc", "dst": "rn", "size": { "int": 1 } },
+      "events": [ { "k": 0, "type": "Alloc" } ]
+    },
+    {
+      "label": "g.8",
+      "loc": [ 14, 15 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+        "val": { "int": 1 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    },
+    {
+      "label": "g.9",
+      "loc": [ 15, 18 ],
+      "loops": [],
+      "command": {
+        "op": "Do",
+        "cond": { "eq": [ { "reg": "rsucc" }, { "int": 0 } ] },
+        "body": [
+          {
+            "label": "g.10",
+            "loc": [ 16, 4 ],
+            "loops": [ 1 ],
+            "command": {
+              "op": "WritePtr",
+              "order": "rlx",
+              "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+              "val": { "int": 0 }
+            },
+            "events": [ { "k": 0, "type": "W" } ]
+          },
+          {
+            "label": "g.11",
+            "loc": [ 17, 20 ],
+            "loops": [ 1 ],
+            "command": {
+              "op": "WritePtr",
+              "order": "rlx",
+              "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+              "val": { "int": 1 }
+            },
+            "events": [ { "k": 0, "type": "W" } ]
+          },
+          {
+            "label": "g.12",
+            "loc": [ 18, 20 ],
+            "loops": [ 1 ],
+            "command": {
+              "op": "Faa",
+              "order_r": "acq",
+              "order_w": "rel",
+              "dst": "rs",
+              "loc": { "reg": "rC" },
+              "addend": { "int": 0 },
+              "rmw_op": "strong"
+            },
+            "events": [ { "k": 0, "type": "R" }, { "k": 1, "type": "W" } ]
+          },
+          {
+            "label": "g.13",
+            "loc": [ 19, 35 ],
+            "loops": [ 1 ],
+            "command": {
+              "op": "ReadPtr",
+              "order": "rlx",
+              "dst": "rv",
+              "ptr": { "reg": "rs" }
+            },
+            "events": [ { "k": 0, "type": "R" } ]
+          },
+          {
+            "label": "g.14",
+            "loc": [ 20, 12 ],
+            "loops": [ 1 ],
+            "command": {
+              "op": "WritePtr",
+              "order": "rlx",
+              "ptr": { "reg": "rn" },
+              "val": { "add": [ { "reg": "rv" }, { "int": 1 } ] }
+            },
+            "events": [ { "k": 0, "type": "W" } ]
+          },
+          {
+            "label": "g.15",
+            "loc": [ 21, 14 ],
+            "loops": [ 1 ],
+            "command": {
+              "op": "Cas",
+              "order_r": "acq",
+              "order_w": "rel",
+              "dst": "rsucc",
+              "loc": { "reg": "rC" },
+              "expected": { "reg": "rs" },
+              "new": { "reg": "rn" },
+              "rmw_op": "cas"
+            },
+            "events": [
+              { "k": 0, "type": "R" },
+              { "k": 1, "type": "Branch" },
+              { "k": 2, "type": "W" }
+            ]
+          }
+        ],
+        "loop_id": 1
+      },
+      "events": [ { "k": 0, "type": "Branch" } ]
+    },
+    {
+      "label": "g.16",
+      "loc": [ 23, 20 ],
+      "loops": [],
+      "command": {
+        "op": "WritePtr",
+        "order": "rlx",
+        "ptr": { "add": [ { "reg": "rrcu" }, { "reg": "rtid" } ] },
+        "val": { "int": 0 }
+      },
+      "events": [ { "k": 0, "type": "W" } ]
+    }
+  ],
+  "threads": [],
+  "futures": [
+    {
+      "execution": 0,
+      "edges": [ [ "g.2#0", "g.8#0" ], [ "g.4#0", "g.5#0" ] ]
+    },
+    {
+      "execution": 1,
+      "edges": [
+        [ "g.2#0", "g.3#0" ],
+        [ "g.2#0", "g.8#0" ],
+        [ "g.3#0", "g.8#0" ],
+        [ "g.4#0", "g.5#0" ]
+      ]
+    }
+  ]
+}

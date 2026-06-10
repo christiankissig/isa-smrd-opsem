@@ -25,6 +25,7 @@ name derived from the program) is used.
 import argparse
 import json
 import os
+import re
 import sys
 
 
@@ -32,9 +33,41 @@ import sys
 # small helpers
 # --------------------------------------------------------------------------
 
+# Memory-order constructors declared by PROVISIONAL_TYPES below.  Any order
+# value seen in the document that is NOT one of these is rendered verbatim but
+# triggers a stderr warning (it would not typecheck against the provisional
+# `mem_order` datatype).
+KNOWN_ORDERS = ("rlx", "acq", "rel", "acq_rel", "sc")
+
+# event-label grammar (MORDOR_ISA_FORMAT.md s2/s4):
+#   <instr-label>[@<loop-id>:<iter>]#<k>
+# where <instr-label> is "g.<seq>" (init scope) or "t<tid>.<seq>" (thread scope).
+_EVLABEL_RE = re.compile(
+    r"^(?P<instr>(?:g|t\d+)\.\d+)"     # instruction-label: g.N or tT.N
+    r"(?:@(?P<loop>\d+):(?P<iter>\d+))?"  # optional @loop:iter (rolled-loop unrolling)
+    r"#(?P<k>\d+)$"                    # event index
+)
+
+
 def iss(s):
     """Render a python str as an Isabelle ''...'' string literal."""
     return "''%s''" % s
+
+
+def parse_evlabel(lbl):
+    """Best-effort structural parse of an event-label.
+
+    Returns a dict {instr, loop, iter, k, scope} or None if the label does not
+    match the expected grammar.  `scope` is 'init' for g.* labels and 'thread'
+    for t*.* labels.  Used only for validation / warnings; the renderer always
+    emits the label verbatim so unrecognised forms still pass through losslessly.
+    """
+    m = _EVLABEL_RE.match(lbl)
+    if not m:
+        return None
+    d = m.groupdict()
+    d["scope"] = "init" if d["instr"].startswith("g.") else "thread"
+    return d
 
 
 def sanitize(name):
@@ -95,6 +128,34 @@ def render_expr(e):
 # command rendering
 # --------------------------------------------------------------------------
 
+_warned_orders = set()
+
+
+def _rmw_note(cmd):
+    """Inline Isabelle comment carrying the RMW `rmw_op` field (strong/weak),
+    which has no slot in the provisional `command` datatype.  Empty if absent."""
+    rmw = cmd.get("rmw_op")
+    if rmw is None:
+        return ""
+    return r" \<comment> \<open>rmw_op: %s\<close>" % rmw
+
+
+def render_order(o):
+    """Render a memory order as a bare `mem_order` constructor.
+
+    Orders are emitted verbatim (they are valid Isabelle idents).  An order not
+    in KNOWN_ORDERS is passed through but warned about once, since it would not
+    typecheck against the provisional `mem_order` datatype.
+    """
+    if o not in KNOWN_ORDERS and o not in _warned_orders:
+        _warned_orders.add(o)
+        sys.stderr.write(
+            "warning: memory order %r is not one of %s; emitted verbatim "
+            "(will not typecheck against provisional mem_order)\n"
+            % (o, ", ".join(KNOWN_ORDERS)))
+    return o
+
+
 def render_command(cmd, indent):
     """Render one command.  `indent` is the column of the enclosing digest
     entry; nested control-flow digests are indented relative to it."""
@@ -103,35 +164,41 @@ def render_command(cmd, indent):
     if op == "Set":
         return "Set %s %s" % (iss(cmd["dst"]), render_expr(cmd["expr"]))
     if op == "ReadPtr":
-        return "ReadPtr %s %s %s" % (cmd["order"], iss(cmd["dst"]),
+        return "ReadPtr %s %s %s" % (render_order(cmd["order"]), iss(cmd["dst"]),
                                      render_expr(cmd["ptr"]))
     if op == "ReadVar":
-        return "ReadVar %s %s %s" % (cmd["order"], iss(cmd["dst"]),
+        return "ReadVar %s %s %s" % (render_order(cmd["order"]), iss(cmd["dst"]),
                                      iss(cmd["var"]))
     if op == "ReadRef":
         return "ReadRef %s %s" % (iss(cmd["dst"]), iss(cmd["var"]))
     if op == "WritePtr":
-        return "WritePtr %s %s %s" % (cmd["order"], render_expr(cmd["ptr"]),
+        return "WritePtr %s %s %s" % (render_order(cmd["order"]),
+                                      render_expr(cmd["ptr"]),
                                       render_expr(cmd["val"]))
     if op == "WriteVar":
-        return "WriteVar %s %s %s" % (cmd["order"], iss(cmd["var"]),
+        return "WriteVar %s %s %s" % (render_order(cmd["order"]), iss(cmd["var"]),
                                       render_expr(cmd["val"]))
     if op == "Faa":
-        # NB: schema field "rmw_op" (strong/weak) is not rendered (see header).
-        return "Faa %s %s %s %s %s" % (cmd["order_r"], cmd["order_w"],
-                                       iss(cmd["dst"]), render_expr(cmd["loc"]),
-                                       render_expr(cmd["addend"]))
+        # RMW = ONE instruction, two events (R;W).  `rmw_op` (strong/weak) has no
+        # slot in the provisional `command` type, so it is preserved as an inline
+        # Isabelle comment rather than dropped (see header / MORDOR_ISA_FORMAT s7).
+        return "Faa %s %s %s %s %s%s" % (
+            render_order(cmd["order_r"]), render_order(cmd["order_w"]),
+            iss(cmd["dst"]), render_expr(cmd["loc"]),
+            render_expr(cmd["addend"]), _rmw_note(cmd))
     if op == "Cas":
-        return "Cas %s %s %s %s %s %s" % (
-            cmd["order_r"], cmd["order_w"], iss(cmd["dst"]),
-            render_expr(cmd["loc"]), render_expr(cmd["expected"]),
-            render_expr(cmd["new"]))
+        # RMW = ONE instruction, three events (R;Branch;W on success, no W on fail).
+        return "Cas %s %s %s %s %s %s%s" % (
+            render_order(cmd["order_r"]), render_order(cmd["order_w"]),
+            iss(cmd["dst"]), render_expr(cmd["loc"]),
+            render_expr(cmd["expected"]), render_expr(cmd["new"]),
+            _rmw_note(cmd))
     if op == "Alloc":
         return "Alloc %s %s" % (iss(cmd["dst"]), render_expr(cmd["size"]))
     if op == "Free":
         return "Free %s" % render_expr(cmd["ptr"])
     if op == "Fence":
-        return "Fence %s" % cmd["order"]
+        return "Fence %s" % render_order(cmd["order"])
     if op == "If":
         sub = indent + "    "
         then_d = render_digest(cmd.get("then", []), sub)
@@ -139,13 +206,21 @@ def render_command(cmd, indent):
         return "If %s\n%s%s\n%s%s" % (render_expr(cmd["cond"]),
                                       sub, then_d, sub, else_d)
     if op in ("While", "Do"):
+        # `Do` (do-while) is not in MORDOR_ISA_FORMAT s3 v0.1 but appears in
+        # cas_aba; treated like While (see s7 grammar gaps).  `loop_id` is
+        # carried on the command in the impl; default to -1 if a future
+        # producer omits it (renders as `(-1)`, an obvious sentinel).
         ctor = "While" if op == "While" else "Do"
         sub = indent + "    "
         body_d = render_digest(cmd.get("body", []), sub)
-        return "%s %s\n%s%s\n%s(%d)" % (ctor, render_expr(cmd["cond"]),
-                                        sub, body_d, sub, cmd["loop_id"])
+        loop_id = cmd.get("loop_id", -1)
+        lid = "%d" % loop_id if loop_id >= 0 else "(%d)" % loop_id
+        return "%s %s\n%s%s\n%s%s" % (ctor, render_expr(cmd["cond"]),
+                                      sub, body_d, sub, lid)
 
-    raise ValueError("unknown command op: %r" % (op,))
+    raise ValueError(
+        "unknown command op %r (extend render_command / PROVISIONAL_TYPES "
+        "to support it; see MORDOR_ISA_FORMAT.md s3)" % (op,))
 
 
 def render_digest(instrs, indent):
@@ -164,6 +239,42 @@ def render_digest(instrs, indent):
 # --------------------------------------------------------------------------
 # event -> instruction map (the digest's auxiliary table)
 # --------------------------------------------------------------------------
+
+def normalise_edges(edges, ctx=""):
+    """Normalise a futures edge-set for rendering.
+
+    The schema's `edges` are `(ppo u DP)` tuples over event-labels (s1/s4):
+      * each `[e1, e2]` is read as the ordered pair `(e1, e2)`;
+      * reflexive (identity) edges `(e, e)` are DROPPED -- the spec says the
+        renderer/consumer takes reflexive closure, so they carry no information
+        and would only clutter the set;
+      * exact duplicates are removed;
+      * order is preserved (first occurrence wins), which keeps the rendered
+        set diffable against the source JSON.
+
+    Unparseable event-labels are passed through verbatim but warned about.
+    Returns a list of (src, dst) 2-tuples.
+    """
+    seen = set()
+    out = []
+    for e in edges:
+        if not isinstance(e, (list, tuple)) or len(e) != 2:
+            raise ValueError("malformed edge %r%s (expected a 2-element "
+                             "[src, dst])" % (e, ctx))
+        s, t = e[0], e[1]
+        for lbl in (s, t):
+            if parse_evlabel(lbl) is None:
+                sys.stderr.write(
+                    "warning: edge label %r%s does not match the event-label "
+                    "grammar; emitted verbatim\n" % (lbl, ctx))
+        if s == t:
+            continue  # reflexive: dropped (consumer takes reflexive closure)
+        if (s, t) in seen:
+            continue  # duplicate
+        seen.add((s, t))
+        out.append((s, t))
+    return out
+
 
 def collect_events(instrs, acc):
     """Flatten the (possibly nested) instruction tree, collecting
@@ -262,11 +373,15 @@ def render_theory(doc, theory_name):
     a("    * \\<Phi>_%s : the future set, one edge-set over event-labels per execution" % frag)
     a("")
     a("  Notes / faithfulness:")
-    a("    * RMW (Faa/Cas) is ONE instruction carrying several events (#0,#1,#2).")
+    a("    * RMW (Faa/Cas) is ONE instruction carrying several events (Faa #0,#1;")
+    a("      Cas #0,#1,#2 -- the W #2 is absent on a failing CAS).")
     a("    * Loop-iteration event-labels (e.g. t0.4@1:1#0) are rendered verbatim in \\<Phi>.")
-    a("    * Edges are rendered as in the JSON; reflexive (identity) closure is left to")
-    a("      the consumer (MORDOR_ISA_FORMAT.md s1).")
-    a("    * Faa/Cas `rmw_op` (strong/weak) is present in the schema but NOT rendered here.")
+    a("    * init-scope labels are g.* ; thread-scope labels are t<tid>.* .")
+    a("    * Edges are normalised before rendering: reflexive (identity) edges are")
+    a("      DROPPED (the consumer takes reflexive closure, MORDOR_ISA_FORMAT.md s1)")
+    a("      and exact duplicates removed; first-occurrence order is preserved.")
+    a("    * Faa/Cas `rmw_op` (strong/weak) has no slot in the provisional command")
+    a("      type, so it is preserved as an inline Isabelle comment on the entry.")
     a("*)")
     a("")
     a("theory %s" % theory_name)
@@ -309,7 +424,10 @@ def render_theory(doc, theory_name):
     collect_events(init, triples)
     for th in doc.get("threads", []):
         collect_events(th.get("body", []), triples)
-    a(r"text \<open>Event \<open>\<rightarrow>\<close> instruction map (event-label, instruction-label, type).\<close>")
+    a(r"text \<open>Static event \<open>\<rightarrow>\<close> instruction map (event-label,")
+    a(r"  instruction-label, type).  These are the \emph{rolled} event-labels (no")
+    a(r"  \<open>@loop:iter\<close> suffix); the unrolled iter-labels appearing in \<open>\<Phi>\<close>")
+    a(r"  collapse onto these via the \<open>lb\<close>-rule (MORDOR_ISA_FORMAT.md s2).\<close>")
     a("definition evmap_%s :: \"(string \\<times> string \\<times> string) list\" where" % frag)
     if triples:
         rows = ["  (%s, %s, %s)" % (iss(e), iss(i), iss(t)) for (e, i, t) in triples]
@@ -333,7 +451,8 @@ def render_theory(doc, theory_name):
         ename = "\\<Phi>_%s_exec%d" % (frag, ex)
         exec_defs.append(ename)
         a("definition %s :: \"(string \\<times> string) set\" where" % ename)
-        edges = fut.get("edges", [])
+        edges = normalise_edges(fut.get("edges", []),
+                                ctx=" (exec %s)" % ex)
         if edges:
             rows = ["  (%s, %s)" % (iss(s), iss(t)) for (s, t) in edges]
             a("  \"%s =" % ename)
@@ -373,8 +492,24 @@ def main(argv=None):
     p.add_argument("--theory", help="Isabelle theory name (default: derived)")
     args = p.parse_args(argv)
 
-    with open(args.input) as f:
-        doc = json.load(f)
+    try:
+        with open(args.input) as f:
+            doc = json.load(f)
+    except (OSError, ValueError) as exc:
+        sys.stderr.write("error: cannot read isa JSON %r: %s\n"
+                         % (args.input, exc))
+        return 2
+
+    if not isinstance(doc, dict):
+        sys.stderr.write("error: isa document must be a JSON object, got %s\n"
+                         % type(doc).__name__)
+        return 2
+
+    fmt = doc.get("format_version")
+    if fmt != "0.1":
+        sys.stderr.write(
+            "warning: format_version is %r; this renderer targets schema "
+            "v0.1 (MORDOR_ISA_FORMAT.md)\n" % (fmt,))
 
     if args.theory:
         theory_name = args.theory
@@ -383,7 +518,12 @@ def main(argv=None):
     else:
         theory_name = "Prog_%s_generated" % sanitize(doc.get("program", "prog"))
 
-    text = render_theory(doc, theory_name)
+    try:
+        text = render_theory(doc, theory_name)
+    except (ValueError, KeyError) as exc:
+        sys.stderr.write("error: failed to render %r: %s\n"
+                         % (args.input, exc))
+        return 2
 
     if args.output:
         with open(args.output, "w") as f:
@@ -391,7 +531,8 @@ def main(argv=None):
         sys.stderr.write("wrote %s (theory %s)\n" % (args.output, theory_name))
     else:
         sys.stdout.write(text)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
