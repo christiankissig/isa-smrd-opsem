@@ -1,9 +1,14 @@
 name: build
 
-# Build the reworked, AFP-bound layers (Core + Track A = OwickiGries + Ownership)
-# against the OFFICIAL Isabelle distribution -- NOT the isabelle-emacs / -vsce fork
-# used for interactive development. A green run is the zero-sorry gate: the layers
-# build from clean, without quick_and_dirty, on a stock prover.
+# Build the reworked layers against the OFFICIAL Isabelle distribution -- NOT the
+# isabelle-emacs / -vsce fork used for interactive development. Runs `make ci`:
+#   * the mature layers (Core, MemSem, OwickiGries, Ownership) build from clean,
+#     WITHOUT quick_and_dirty -- a green run is the zero-sorry gate for them; and
+#   * the in-progress Episodic spine (EventStruct, OpSem, UAF_Bug) is compile-checked
+#     under quick_and_dirty, since it still carries two documented open sorries
+#     (EventStruct episodic_single_iteration_window, UAF_Bug uaf_excluded_fixed).
+# Once those sorries are discharged, fold the spine into the strict gate (see the
+# `ci` target in the Makefile).
 #
 # The legacy MRD_C11_RCU session is intentionally NOT built here: it is work in
 # progress (sorry'd proofs, requires quick_and_dirty) and targets the fork.
@@ -62,5 +67,5 @@ jobs:
           restore-keys: |
             heaps-${{ env.ISABELLE_VERSION }}-${{ runner.os }}-
 
-      - name: Build Core + Track A (no quick_and_dirty)
-        run: make all
+      - name: Build the stack (strict zero-sorry gate on mature layers; q&d compile-check of the spine)
+        run: make ci
