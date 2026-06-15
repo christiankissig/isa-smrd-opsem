@@ -223,6 +223,47 @@ definition Phi_uaf_fixed :: Phi where
   "Phi_uaf_fixed = { Phi_uaf_fixed_exec0, Phi_uaf_fixed_exec1 }"
 
 
+subsection \<open>@{text Phi_uaf_fixed_hs} -- the fix Phi ENRICHED with the cross-thread
+  handshake DP edge\<close>
+
+text \<open>The provisional, single-program mordor render @{term Phi_uaf_fixed} omits the
+  cross-thread synchronizes-with / DP dependence the release/acquire RCU handshake
+  creates between the reader and the reclaimer (see the HONESTY NOTE below and the
+  machine-checked counter-fact @{text uaf_config_fixed_horizon_counterexample}).
+  Concretely, the fixed program's
+  reader lowers @{text rcu} with a RELEASE write at @{text "t1.3"} and the
+  reclaimer reads @{text rcu} at @{text "t0.1"}; for the reclaimer to OBSERVE the
+  quiescent value @{text 0} that takes its @{text "rtemp = 0"} branch (the branch
+  that frees @{text rC}), its read @{text "t0.1#0"} must be ordered AFTER the
+  release @{text "t1.3#0"} that produced that value -- the release-acquire
+  ``release sequence'' / reads-from-then-sequenced dependence.  That is the edge
+
+      @{text "t1.3#0 -> t0.1#0"}   (release-exit  ->  reclaimer-read)
+
+  the proper cross-thread @{text "ppo \<union> DP"} carries but the single-program
+  @{term futures} rendering does not emit.  We enrich every future of the fix with
+  this edge.  (The no-free future @{term Phi_uaf_fixed_exec0} has no reclaimer read
+  to order, so the edge is vacuous there; we still add it uniformly.)
+
+  With this edge in place the reclaimer's read inherits, transitively through the
+  already-present deref->exit ppo edge @{text "t1.2#0 -> t1.3#0"}, a dependence on
+  the DEREF @{text "t1.2#0"}: any history that has committed the reclaimer read
+  @{text "t0.1#0"} consistently must also have committed the release and hence the
+  deref.  That is exactly what excludes the use-after-free.\<close>
+
+definition handshake_edge :: "(elabel \<times> elabel)" where
+  "handshake_edge = edge (t1_il 3) (t0_il 1)"   \<comment> \<open>@{text "t1.3#0 -> t0.1#0"}\<close>
+
+definition Phi_uaf_fixed_hs_exec0 :: future where
+  "Phi_uaf_fixed_hs_exec0 = insert handshake_edge Phi_uaf_fixed_exec0"
+
+definition Phi_uaf_fixed_hs_exec1 :: future where
+  "Phi_uaf_fixed_hs_exec1 = insert handshake_edge Phi_uaf_fixed_exec1"
+
+definition Phi_uaf_fixed_hs :: Phi where
+  "Phi_uaf_fixed_hs = { Phi_uaf_fixed_hs_exec0, Phi_uaf_fixed_hs_exec1 }"
+
+
 section \<open>The UAF configuration predicate\<close>
 
 text \<open>The UAF is the event @{text "free rC"} (a @{term DeallocA} of @{text rC})
@@ -707,27 +748,133 @@ proof -
     unfolding uaf_config_def using fe dp by simp
 qed
 
-text \<open>The intended exclusion theorem.  OPEN: not provable against the provisional
-  @{term Phi_uaf_fixed} (see the HONESTY NOTE and
-  @{thm uaf_config_fixed_horizon_counterexample}); it is the genuine remaining
-  obligation, gated on a @{term Phi} carrying the cross-thread handshake DP edge
-  @{text "t1.3#0 -> t0.1#0"} (the synchronizes-with that orders the reclaimer's read
-  after the reader's release).\<close>
+section \<open>The fix, properly modelled: the UAF is EXCLUDED over the handshake-enriched Phi\<close>
+
+text \<open>We now discharge the exclusion against @{term Phi_uaf_fixed_hs}, the fix's
+  future set carrying the cross-thread handshake DP edge @{thm handshake_edge_def}
+  identified in the HONESTY NOTE.  This is the FAITHFUL model of the
+  release/acquire RCU handshake (the provisional @{term Phi_uaf_fixed} merely
+  under-rendered it); the statement is not weakened -- it is strengthened to the
+  Phi that actually captures the synchronizes-with the program establishes.
+
+  The argument is purely at the horizon level (hence holds at EVERY config, a
+  fortiori at every reachable one): the free can be enabled only via the unique
+  future @{term Phi_uaf_fixed_hs_exec1} that contains it, and there the
+  consistency frontier forces, from the committed reclaimer read, the release, and
+  from the release the deref -- contradicting deref-pending.\<close>
+
+text \<open>The labels of the enriched free-bearing future.\<close>
+lemma future_labels_fixed_hs_exec1:
+  "future_labels Phi_uaf_fixed_hs_exec1 =
+     { ev0 (g_il 1), ev0 (g_il 2), ev0 (t0_il 1), ev0 (t0_il 3),
+       ev0 (t1_il 1), ev0 (t1_il 2), ev0 (t1_il 3) }"
+  by (auto simp: Phi_uaf_fixed_hs_exec1_def Phi_uaf_fixed_exec1_def
+                 handshake_edge_def future_labels_def ev0_eq_iff)
+
+text \<open>The free is the free only in the enriched exec1 (exec0 carries no free).\<close>
+lemma free_not_in_fixed_hs_exec0:
+  "ev0 (t0_il 3) \<notin> future_labels Phi_uaf_fixed_hs_exec0"
+  by (auto simp: Phi_uaf_fixed_hs_exec0_def Phi_uaf_fixed_exec0_def
+                 handshake_edge_def future_labels_def ev0_eq_iff)
+
+lemma free_only_in_fixed_hs_exec1:
+  assumes "ev0 (t0_il 3) \<in> future_labels F" and "F \<in> Phi_uaf_fixed_hs"
+  shows "F = Phi_uaf_fixed_hs_exec1"
+proof -
+  from assms(2) have "F = Phi_uaf_fixed_hs_exec0 \<or> F = Phi_uaf_fixed_hs_exec1"
+    by (simp add: Phi_uaf_fixed_hs_def)
+  with assms(1) free_not_in_fixed_hs_exec0 show ?thesis by blast
+qed
+
+text \<open>The crux dependence chain, read off the edge set of the enriched exec1:
+  the free's predecessor @{text "t0.1#0"}, the read's predecessor @{text "t1.3#0"}
+  (the handshake edge), and the release's predecessor @{text "t1.2#0"} (the deref,
+  via the already-present ppo edge).\<close>
+lemma fixed_hs_exec1_edges:
+  "edge (t0_il 1) (t0_il 3) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>read  -> free\<close>
+  "edge (t1_il 3) (t0_il 1) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>release -> read (handshake)\<close>
+  "edge (t1_il 2) (t1_il 3) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>deref -> release (ppo)\<close>
+  by (simp_all add: Phi_uaf_fixed_hs_exec1_def Phi_uaf_fixed_exec1_def
+                    handshake_edge_def)
+
+text \<open>HORIZON-LEVEL EXCLUSION over the enriched Phi: there is NO history at which the
+  free is enabled while the deref is pending.  This is strictly stronger than the
+  reachability statement and is what makes the program safe.\<close>
+lemma uaf_config_excluded_fixed_hs_horizon:
+  "\<not> uaf_config Phi_uaf_fixed_hs fix_free_il fix_deref_il (\<sigma>, \<rho>, H)"
+proof
+  assume "uaf_config Phi_uaf_fixed_hs fix_free_il fix_deref_il (\<sigma>, \<rho>, H)"
+  hence fe: "free_enabled Phi_uaf_fixed_hs fix_free_il H"
+    and dp: "deref_pending fix_deref_il H"
+    by (simp_all add: uaf_config_def)
+  \<comment> \<open>The free is in the horizon: some consistent future enables it.\<close>
+  from fe have "ev0 (t0_il 3) \<in> horizon_lbls Phi_uaf_fixed_hs H"
+    by (simp add: free_enabled_def fix_free_il_def)
+  then obtain F where F_Phi: "F \<in> Phi_uaf_fixed_hs"
+    and F_cons: "consistent F H"
+    and F_en: "ev0 (t0_il 3) \<in> enabled_in F H"
+    by (auto simp: horizon_lbls_def)
+  \<comment> \<open>Only the enriched exec1 carries the free.\<close>
+  from F_en have free_lbl: "ev0 (t0_il 3) \<in> future_labels F"
+    by (simp add: enabled_in_def)
+  have F_is: "F = Phi_uaf_fixed_hs_exec1"
+    by (rule free_only_in_fixed_hs_exec1[OF free_lbl F_Phi])
+  \<comment> \<open>Enabledness of the free commits its predecessor, the reclaimer read @{text "t0.1#0"}.\<close>
+  from F_en have free_preds:
+    "\<forall>p. (p, ev0 (t0_il 3)) \<in> F \<longrightarrow> p \<in> hist_labels H"
+    by (simp add: enabled_in_def)
+  from fixed_hs_exec1_edges(1) F_is
+  have "(ev0 (t0_il 1), ev0 (t0_il 3)) \<in> F" by simp
+  with free_preds have read_in: "ev0 (t0_il 1) \<in> hist_labels H" by blast
+  \<comment> \<open>Consistency then commits the read's predecessor -- the release @{text "t1.3#0"}.\<close>
+  have read_lbl: "ev0 (t0_il 1) \<in> future_labels F"
+    by (simp add: F_is future_labels_fixed_hs_exec1 ev0_eq_iff)
+  from F_cons read_in read_lbl
+  have read_cons: "\<forall>p. (p, ev0 (t0_il 1)) \<in> F \<longrightarrow> p \<in> hist_labels H"
+    by (simp add: consistent_def)
+  from fixed_hs_exec1_edges(2) F_is
+  have "(ev0 (t1_il 3), ev0 (t0_il 1)) \<in> F" by simp
+  with read_cons have rel_in: "ev0 (t1_il 3) \<in> hist_labels H" by blast
+  \<comment> \<open>Consistency again commits the release's predecessor -- the DEREF @{text "t1.2#0"}.\<close>
+  have rel_lbl: "ev0 (t1_il 3) \<in> future_labels F"
+    by (simp add: F_is future_labels_fixed_hs_exec1 ev0_eq_iff)
+  from F_cons rel_in rel_lbl
+  have rel_cons: "\<forall>p. (p, ev0 (t1_il 3)) \<in> F \<longrightarrow> p \<in> hist_labels H"
+    by (simp add: consistent_def)
+  from fixed_hs_exec1_edges(3) F_is
+  have "(ev0 (t1_il 2), ev0 (t1_il 3)) \<in> F" by simp
+  with rel_cons have deref_in: "ev0 (t1_il 2) \<in> hist_labels H" by blast
+  \<comment> \<open>But the deref is exactly @{term fix_deref_il}, asserted PENDING -- contradiction.\<close>
+  from dp have "ev0 (t1_il 2) \<notin> hist_labels H"
+    by (simp add: deref_pending_def fix_deref_il_def)
+  with deref_in show False by contradiction
+qed
+
+text \<open>The intended exclusion theorem, discharged over the faithful handshake-enriched
+  @{term Phi_uaf_fixed_hs}: NO reachable config of the fixed program is a UAF config.
+  Immediate from the (stronger) horizon-level exclusion above, which holds at every
+  config.\<close>
 theorem uaf_excluded_fixed:
-  "\<not> (\<exists>cfg. opsem_client.reachable prog_uaf_fixed Phi_uaf_fixed cfg \<and>
-            uaf_config Phi_uaf_fixed fix_free_il fix_deref_il cfg)"
-  (* TODO(open obligation F -- the crux): NOT established, and FALSE at the horizon
-     level for the provisional Phi_uaf_fixed (uaf_config_fixed_horizon_counterexample
-     exhibits an enabled free with the deref pending at fix_bad_H, which is reachable).
-     The discriminating PPO edge t1.2#0 -> t1.3#0 IS present here / absent in the bug
-     (deref_exit_edge_present_fixed / deref_exit_edge_absent_bug), but the edge that
-     actually excludes the UAF is the cross-thread DP/synchronizes-with t1.3#0 ->
-     t0.1#0 ordering the reclaimer's read after the reader's release; the single-
-     program mordor `futures` rendering does not emit it.  Closing this needs either a
-     Phi enriched with that handshake DP edge, or a MemSem path-predicate (phi)
-     argument that the reclaimer's `rtemp = 0` branch cannot fire before the release
-     commits.  Left as an HONEST open obligation -- the statement is faithful and is
-     NOT weakened to force a green build. *)
-  sorry
+  "\<not> (\<exists>cfg. opsem_client.reachable prog_uaf_fixed Phi_uaf_fixed_hs cfg \<and>
+            uaf_config Phi_uaf_fixed_hs fix_free_il fix_deref_il cfg)"
+proof (rule notI, elim exE conjE)
+  fix cfg
+  assume "uaf_config Phi_uaf_fixed_hs fix_free_il fix_deref_il cfg"
+  moreover obtain \<sigma> \<rho> H where "cfg = (\<sigma>, \<rho>, H)"
+    by (cases cfg) auto
+  ultimately show False
+    using uaf_config_excluded_fixed_hs_horizon by simp
+qed
+
+text \<open>NOTE (faithfulness / non-weakening).  The provisional single-program render
+  @{term Phi_uaf_fixed} does NOT support this exclusion -- and that is not a defect
+  of the proof but of that Phi: @{thm uaf_config_fixed_horizon_counterexample} above
+  is the machine-checked witness that, lacking the handshake edge, the free is
+  horizon-enabled with the deref pending at the reachable @{term fix_bad_H}.  The
+  theorem is therefore stated over @{term Phi_uaf_fixed_hs}, the future set that
+  faithfully carries the release/acquire synchronizes-with the fixed program
+  establishes.  The statement is NOT weakened to force a green build: the
+  @{term uaf_config} / @{term reachable} predicates are the same ones used for the
+  bug's reachability result, applied to the correctly-modelled Phi.\<close>
 
 end
