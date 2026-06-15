@@ -7,5 +7,6 @@
 *.aux
 __pycache__/
 .claude/
+memory/
 workspace/scratch/
 REWORK_PLAN.md
