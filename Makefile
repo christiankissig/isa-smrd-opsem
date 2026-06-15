@@ -24,20 +24,21 @@ ISABELLE ?= isabelle
 
 # All reworked-layer session directories (registered for every build; the target
 # session selects what is actually built, with dependencies built automatically).
-DIRS := -d Core -d MemSem -d EventStruct -d OpSem -d OwickiGries -d Ownership -d clients/UAF_Bug
+DIRS := -d Core -d MemSem -d EventStruct -d OpSem -d OwickiGries -d Ownership -d clients/UAF_Bug -d clients/RCU
 
 # The full reworked stack, leaves last (dependencies build automatically).
-SESSIONS := Core MemSem EventStruct OpSem OwickiGries Ownership UAF_Bug
+SESSIONS := Core MemSem EventStruct OpSem OwickiGries Ownership UAF_Bug RCU_Client
 
 # The mature, genuinely zero-sorry layers (the strict non-q&d gate). The Episodic
-# spine (EventStruct/OpSem/UAF_Bug) is excluded here because it still carries two
-# documented open sorries; it is compile-checked separately under quick_and_dirty.
+# spine (EventStruct/OpSem/UAF_Bug/RCU_Client) is excluded here because it sits on
+# OpSem, which still carries two documented open sorries; it is compile-checked
+# separately under quick_and_dirty. (RCU_Client itself adds no sorry.)
 CLEAN_SESSIONS := Core MemSem OwickiGries Ownership
-SPINE_SESSIONS := EventStruct OpSem UAF_Bug
+SPINE_SESSIONS := EventStruct OpSem UAF_Bug RCU_Client
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all core memsem eventstruct opsem og ownership track-a uaf spine gate ci rcu legacy dry clean
+.PHONY: help all core memsem eventstruct opsem og ownership track-a uaf rcu-client spine gate ci rcu legacy dry clean
 
 help:
 	@echo "rcu-c11-opsem -- Isabelle build targets"
@@ -48,6 +49,7 @@ help:
 	@echo "  make eventstruct EventStruct  -- event structures, Phi, horizon (layer 3; needs Core)"
 	@echo "  make opsem       OpSem        -- Episodic step relation (layer 4; needs MemSem+EventStruct)"
 	@echo "  make uaf         UAF_Bug      -- paper UAF client (needs OpSem)"
+	@echo "  make rcu-client  RCU_Client   -- reworked RCU client, data-as-program (needs OpSem; q&d via spine)"
 	@echo "  make og          OwickiGries -- generic Owicki-Gries framework"
 	@echo "  make ownership   Ownership  -- ownership instantiation (needs OwickiGries); alias: track-a"
 	@echo "  make spine       EventStruct+OpSem+UAF_Bug WITH quick_and_dirty (WIP route; compiles through sorries)"
@@ -81,6 +83,11 @@ opsem:
 
 uaf:
 	$(ISABELLE) build $(DIRS) UAF_Bug
+
+# RCU_Client sits on OpSem (open sorries), so build it through quick_and_dirty like
+# the rest of the spine. RCU_Client adds no sorry of its own.
+rcu-client:
+	$(ISABELLE) build -o quick_and_dirty=true $(DIRS) RCU_Client
 
 og:
 	$(ISABELLE) build $(DIRS) OwickiGries

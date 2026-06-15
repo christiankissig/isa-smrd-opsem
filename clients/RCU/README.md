@@ -1,16 +1,29 @@
-# Client: RCU (existing pre-rework formalization)
+# Client: RCU
 
-The full RCU algorithm formalization as it stood before the rework. **Most of this is to be
-replaced or retired** per REWORK_PLAN.md → §6 triage; it is kept here as the RCU client area
-while the new layered stack is built and RCU is re-instantiated on top of it.
+The pre-rework RCU futures-enumeration development that used to live here has been
+**RETIRED** (W4 hygiene): it was the "wrong future set" (the 114-constructor
+`Futures` enumeration), with the I7 per-future proof explosion (~12 000 sorries),
+and it is subsumed by the reworked Episodic spine (Core / MemSem / EventStruct /
+OpSem and the `clients/UAF_Bug` worked example).
 
-Notable contents (see §6 for per-file disposition):
-- **Program model:** `RCU_state` (PC labels + state record + the 114-ctor `Futures` datatype
-  = the "wrong future set"), `RCU_atomics` (operand-baked atomics), `RCU_prog`, `RCU_mrd`.
-- **Futures machinery (retire):** `RCU_futures`, `RCU_futures_inequalities` (12,113 lines).
-- **Invariants/preconds:** `RCU_maininvs`, `RCU_preconds(_2)`, `RCU_local`, `RCU_aux`.
-- **Step/safety proofs:** `RCU_I/R/S_steps`, `RCU_steps(_unified)`, `RCU_wm_*`,
-  `RCU_wm_proofs_old_*` (admitted per-future explosion incl. I7 ≈ 12 000 sorries).
+Deleted in the retirement:
+- **Program model:** `RCU_state`, `RCU_atomics`, `RCU_prog`, `RCU_mrd`.
+- **Futures machinery:** `RCU_futures`, `RCU_futures_inequalities` (auto-generated,
+  ~1 MB / 12 113 lines), plus `scripts/generate_futures_inequalities.py` and
+  `create_scripts.zsh` (the dead generators for these files).
+- **Invariants / preconds:** `RCU_maininvs`, `RCU_preconds(_2)`, `RCU_local`,
+  `RCU_aux`.
+- **Step / safety proofs:** `RCU_I/R/S_steps`, `RCU_steps(_unified)`, `RCU_wm_*`,
+  `RCU_wm_proofs_old_*` (the admitted per-future explosion).
+- The SEFM imports they depended on, `MemSem/PSem.thy` and
+  `MemSem/OpSem_definite.thy` (their content is folded into `MemSem/MemSem.thy`).
 
-Target: a thin client = `prog_RCU` (labelled `command` data) + `Φ_RCU` (mordor) + no-UAF
-proof via `Ownership`.
+What survives here:
+- **`RCU_prog_digest.thy` / `RCU_inc_loop_digest.thy`** — the GENERATED mordor
+  digests (provisional placeholder types, import only `Main`). These are the
+  structural source-of-truth for the reworked RCU client and are built by the
+  legacy `MRD_C11_RCU` session for archival/reference.
+
+Target: a thin client = `prog_RCU` (labelled `command` data over the real Core
+types) + `Phi_RCU` (mordor) + no-UAF proof via the OpSem step relation, mirroring
+`clients/UAF_Bug/UAF_Bug.thy`.

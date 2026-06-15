@@ -4,14 +4,15 @@ name: build
 # isabelle-emacs / -vsce fork used for interactive development. Runs `make ci`:
 #   * the mature layers (Core, MemSem, OwickiGries, Ownership) build from clean,
 #     WITHOUT quick_and_dirty -- a green run is the zero-sorry gate for them; and
-#   * the in-progress Episodic spine (EventStruct, OpSem, UAF_Bug) is compile-checked
-#     under quick_and_dirty, since it still carries two documented open sorries
-#     (EventStruct episodic_single_iteration_window, UAF_Bug uaf_excluded_fixed).
+#   * the in-progress Episodic spine (EventStruct, OpSem, UAF_Bug, RCU_Client) is
+#     compile-checked under quick_and_dirty, since it sits on OpSem, which still
+#     carries two documented open sorries (EventStruct episodic_single_iteration_window,
+#     UAF_Bug uaf_excluded_fixed). RCU_Client itself adds no sorry.
 # Once those sorries are discharged, fold the spine into the strict gate (see the
 # `ci` target in the Makefile).
 #
-# The legacy MRD_C11_RCU session is intentionally NOT built here: it is work in
-# progress (sorry'd proofs, requires quick_and_dirty) and targets the fork.
+# The legacy MRD_C11_RCU session (now just the two generated RCU digests) is
+# intentionally NOT built here; it targets the fork via `make rcu`.
 
 on:
   push:

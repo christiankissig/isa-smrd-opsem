@@ -1,0 +1,30 @@
+chapter AFP
+
+session RCU_Client = OpSem +
+  description \<open>
+    Client: the RCU inc() critical section, instantiated against the Episodic OpSem
+    stack (W10 refactor).  Defines `prog_RCU` as Core-typed labelled `command` data
+    over the REAL Core types (operand-generic; no per-PC `case`, no baked-in C /
+    var_s / var_n, S7 dropped), re-exports the single generic per-command effect
+    rule against the concrete program, and exhibits a steppable reachability chain
+    over the loop-free init preamble.
+
+    SCOPE: the loop-free OpSem fragment only.  The RCU retry / poll LOOPS are
+    present in `prog_RCU` as rolled `While`, but stepping them needs the lb / loop
+    rule (W8b, still open), so no end-to-end RCU safety theorem is claimed here.
+
+    Imports OpSem session-qualified (which carries the two documented open spine
+    sorries), so this builds under quick_and_dirty alongside the rest of the spine.
+
+    The surviving generated mordor digests `RCU_prog_digest` / `RCU_inc_loop_digest`
+    (provisional placeholder types, import only Main) are built by the legacy
+    `MRD_C11_RCU` session (top-level ROOT), not here.
+  \<close>
+  options [timeout = 1200]
+  sessions
+    "Core"
+    "MemSem"
+    "EventStruct"
+    "OpSem"
+  theories
+    RCU_Client
