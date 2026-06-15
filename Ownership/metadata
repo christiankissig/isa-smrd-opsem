@@ -11,9 +11,20 @@
 # the AFP tooling (it is inferred from the session ROOT's `session Ownership =
 # OwickiGries + ...`).
 
+# Author registration (paste into the AFP global `metadata/authors.toml`):
+#
+#   [kissig]
+#   name = "Christian Kissig"
+#   [kissig.emails]
+#   [kissig.emails.kissig_email1]
+#   user = ["dev", "kissig"]        # AFP obfuscation: dev /at/ kissig /dot/ fastmail /dot/ fm
+#   host = ["fastmail", "fm"]
+#
+# The `author`/`notify` fields below reference that registered id.
+
 [entries.Ownership]
 title = "Ownership: an Instantiation of the Generic Owicki-Gries Logic, with Use-After-Free Safety"
-date = "TODO-YYYY-MM-DD"            # submission date
+date = "2026-06-15"                 # submission date
 topics = [
   "Computer science/Concurrency",
   "Computer science/Programming languages/Logics",
@@ -33,10 +44,10 @@ OwickiGries entry.
 license = "bsd"                     # AFP licenses: "bsd" or "lgpl"
 
 [entries.Ownership.authors]
-# author = ["<author-id>"]
+author = ["kissig"]                  # author id registered in metadata/authors.toml
 
 [entries.Ownership.notify]
-# author = ["<author-id>"]
+author = ["kissig"]
 
 [entries.Ownership.related]
 # dois = []

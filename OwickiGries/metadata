@@ -5,9 +5,20 @@
 # https://www.isa-afp.org/help/ and the AFP submission guidelines). Fill in the
 # author/email/date when submitting.
 
+# Author registration (paste into the AFP global `metadata/authors.toml`):
+#
+#   [kissig]
+#   name = "Christian Kissig"
+#   [kissig.emails]
+#   [kissig.emails.kissig_email1]
+#   user = ["dev", "kissig"]        # AFP obfuscation: dev /at/ kissig /dot/ fastmail /dot/ fm
+#   host = ["fastmail", "fm"]
+#
+# The `author`/`notify` fields below reference that registered id.
+
 [entries.OwickiGries]
 title = "A Generic Owicki-Gries Logic over an Abstract Transition System"
-date = "TODO-YYYY-MM-DD"            # submission date
+date = "2026-06-15"                 # submission date
 topics = [
   "Computer science/Programming languages/Logics",
   "Computer science/Concurrency",
@@ -26,10 +37,10 @@ annotated and bare interleaving semantics. HOL-only (imports Main).
 license = "bsd"                     # AFP licenses: "bsd" or "lgpl"
 
 [entries.OwickiGries.authors]
-# author = ["<author-id>"]          # add author id(s) registered in metadata/authors
+author = ["kissig"]                  # author id registered in metadata/authors.toml
 
 [entries.OwickiGries.notify]
-# author = ["<author-id>"]
+author = ["kissig"]
 
 [entries.OwickiGries.related]
 # dois = []
