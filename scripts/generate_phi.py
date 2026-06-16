@@ -686,6 +686,144 @@ def indent_block(text, prefix):
 
 
 # --------------------------------------------------------------------------
+# Core-typed Phi rendering (--core): emit \<Phi> over the REAL Core elabel
+# types so a client proof (clients/UAF_Bug/UAF_Bug.thy) can consume it directly,
+# instead of the provisional string-labelled placeholder above.
+# --------------------------------------------------------------------------
+#
+# Event-labels map to Core terms via the shared helpers in UAF_Labels.thy:
+#   g.<seq>#0   ->  ev0 (il Init <seq>)
+#   t<t>.<seq>#0 ->  ev0 (il (Thr <t>) <seq>)
+#   ...#<k>      ->  sub (il <own> <seq>) <k>        (RMW sub-events, k>0)
+# and an edge whose endpoints are both #0 uses the `edge` abbreviation
+# (edge a b = (ev0 a, ev0 b)).  This is exactly the vocabulary the UAF proof
+# already uses, so the generated \<Phi> is definitionally the proof's \<Phi>.
+# Loop-iteration labels (with @loop:iter) are NOT yet supported here (the
+# loop-free clients UAF need them not); such a label aborts core rendering.
+
+def _core_iloc_term(instr, loop):
+    """Render an instruction-label (e.g. 'g.3' / 't1.3') as an `il OWN SEQ`
+    Core term, or None if it carries a loop suffix / is unrecognised."""
+    if loop is not None:
+        return None
+    scope, _, seq = instr.partition(".")
+    if not seq.isdigit():
+        return None
+    if scope == "g":
+        return "il Init %s" % seq
+    if len(scope) > 1 and scope[0] == "t" and scope[1:].isdigit():
+        return "il (Thr %s) %s" % (scope[1:], seq)
+    return None
+
+
+def _core_evlabel_term(lbl):
+    """Render an event-label as a Core `elabel` term (or None)."""
+    d = parse_evlabel(lbl)
+    if d is None:
+        return None
+    iloc = _core_iloc_term(d["instr"], d["loop"])
+    if iloc is None:
+        return None
+    k = int(d["k"])
+    return "ev0 (%s)" % iloc if k == 0 else "sub (%s) %d" % (iloc, k)
+
+
+def _core_edge_term(src, dst):
+    """Render one edge.  Both-#0 edges use the `edge` abbreviation over ilocs;
+    otherwise an explicit (elabel, elabel) pair.  None if unrenderable."""
+    ds, dt = parse_evlabel(src), parse_evlabel(dst)
+    if ds and dt and ds["k"] == "0" and dt["k"] == "0":
+        il_s = _core_iloc_term(ds["instr"], ds["loop"])
+        il_t = _core_iloc_term(dt["instr"], dt["loop"])
+        if il_s and il_t:
+            return "edge (%s) (%s)" % (il_s, il_t)
+    es, et = _core_evlabel_term(src), _core_evlabel_term(dst)
+    if es and et:
+        return "(%s, %s)" % (es, et)
+    return None
+
+
+def render_core_phi(doc, theory_name, derived_edges=None, labels_import="UAF_Labels"):
+    """Render ONLY the future set \<Phi>, over Core elabel types, importing the
+    shared label helpers (`il`/`ev0`/`edge`) from `labels_import`."""
+    prog = doc.get("program", "prog")
+    frag = sanitize(prog)
+    fmt = doc.get("format_version", "?")
+    out = []
+    a = out.append
+
+    a("(*")
+    a("  GENERATED FILE -- do not hand-edit.")
+    a("")
+    a("  Rendered by scripts/generate_phi.py --core (REWORK_PLAN.md s5 / W3) from a")
+    a("  mordor isa-mode JSON document (schema v%s, docs/MORDOR_ISA_FORMAT.md)." % fmt)
+    a("  Source program : %s" % prog)
+    a("")
+    a("  Emits \\<Phi>_%s over the REAL Core @{typ elabel} types (via the shared" % frag)
+    a("  label helpers il/ev0/edge in %s), so the client proof consumes it" % labels_import)
+    a("  directly: g.<seq>#0 = ev0 (il Init <seq>), t<t>.<seq>#0 = ev0 (il (Thr t) <seq>).")
+    if derived_edges:
+        a("")
+        a("  \\<Phi> is ENRICHED with cross-thread release-handshake edges DERIVED from")
+        a("  mordor's per-execution reads-from (release-class writer); flagged inline.")
+    a("*)")
+    a("")
+    a("theory %s" % theory_name)
+    a("  imports %s" % labels_import)
+    a("begin")
+    a("")
+    a(r"text \<open>The future set \<open>\<Phi>_%s\<close> over Core @{typ elabel}, one" % frag)
+    a(r"  edge-set per execution; rendered from the mordor isa JSON.\<close>")
+    a("")
+
+    exec_defs = []
+    for fut in doc.get("futures", []):
+        ex = fut["execution"]
+        ename = "\\<Phi>_%s_exec%d" % (frag, ex)
+        exec_defs.append(ename)
+        edges = normalise_edges(fut.get("edges", []), ctx=" (exec %s)" % ex)
+        applied = []
+        if derived_edges:
+            labels = {l for (s, t) in edges for l in (s, t)}
+            for (s, t) in sorted(derived_edges):
+                if s in labels and t in labels and (s, t) not in edges:
+                    edges.append((s, t))
+                    applied.append((s, t))
+        rows = []
+        for (s, t) in edges:
+            term = _core_edge_term(s, t)
+            if term is None:
+                raise ValueError("cannot render core edge %s -> %s (loop label "
+                                 "or unrecognised; --core is loop-free only)"
+                                 % (s, t))
+            rows.append("  " + term)
+        if applied:
+            a(r"text \<open>exec %s: +%d derived release-handshake edge(s): %s\<close>"
+              % (ex, len(applied),
+                 "; ".join("%s \\<rightarrow> %s" % e for e in applied)))
+        a("definition %s :: future where" % ename)
+        if rows:
+            a("  \"%s =" % ename)
+            a("  {")
+            a(",\n".join(rows))
+            a("  }\"")
+        else:
+            a("  \"%s = {}\"" % ename)
+        a("")
+
+    a("definition \\<Phi>_%s :: Phi where" % frag)
+    if exec_defs:
+        a("  \"\\<Phi>_%s =" % frag)
+        a("  { " + ",\n    ".join(exec_defs) + " }\"")
+    else:
+        a("  \"\\<Phi>_%s = {}\"" % frag)
+    a("")
+    a("end")
+    a("")
+    return "\n".join(out)
+
+
+# --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
 
@@ -698,6 +836,12 @@ def main(argv=None):
     p.add_argument("--executions", metavar="EXEC.json",
                    help="companion mordor executions-mode JSON; enables deriving "
                         "cross-thread release handshake edges from its rf relation")
+    p.add_argument("--core", action="store_true",
+                   help="emit ONLY \\<Phi> over the REAL Core elabel types (via the "
+                        "shared label helpers in --labels-import), for direct client "
+                        "consumption, instead of the provisional string-labelled theory")
+    p.add_argument("--labels-import", default="UAF_Labels",
+                   help="theory providing il/ev0/edge for --core (default: UAF_Labels)")
     args = p.parse_args(argv)
 
     try:
@@ -744,7 +888,11 @@ def main(argv=None):
                ", ".join("%s->%s" % e for e in sorted(derived)) or "(none)"))
 
     try:
-        text = render_theory(doc, theory_name, derived_edges=derived)
+        if args.core:
+            text = render_core_phi(doc, theory_name, derived_edges=derived,
+                                   labels_import=args.labels_import)
+        else:
+            text = render_theory(doc, theory_name, derived_edges=derived)
     except (ValueError, KeyError) as exc:
         sys.stderr.write("error: failed to render %r: %s\n"
                          % (args.input, exc))

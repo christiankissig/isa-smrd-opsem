@@ -36,27 +36,16 @@
 *)
 
 theory UAF_Bug
-  imports "OpSem.OpSem"
+  imports "OpSem.OpSem" UAF_Labels UAF_Phi_fixed_gen
 begin
 
 section \<open>Owners, labels, and the label-encoding helpers\<close>
 
 text \<open>The two worker threads are @{term "Thr 0"} (the reclaimer, mordor @{text t0})
   and @{term "Thr 1"} (the reader, mordor @{text t1}); the init preamble is
-  @{term Init} (mordor @{text g}).  An instruction @{text "<scope>.<seq>"} maps to
-  the @{typ iloc} with that owner and sequence number (loop-free: @{text "ilo_loops
-  = []"}); its leading event-label @{text "<scope>.<seq>#0"} is @{text "sub iloc 0"}.\<close>
-
-definition il :: "owner \<Rightarrow> nat \<Rightarrow> iloc" where
-  "il own s = \<lparr> ilo_owner = own, ilo_seq = s, ilo_loops = [] \<rparr>"
-
-abbreviation "g_il s   \<equiv> il Init s"
-abbreviation "t0_il s  \<equiv> il (Thr 0) s"
-abbreviation "t1_il s  \<equiv> il (Thr 1) s"
-
-text \<open>The leading event-label @{text "l#0"} of an instruction-label.\<close>
-definition ev0 :: "iloc \<Rightarrow> elabel" where
-  "ev0 l = sub l 0"
+  @{term Init} (mordor @{text g}).  The label-encoding helpers @{term il} / @{term ev0}
+  / @{term edge} live in @{text UAF_Labels} (imported above), shared with the
+  GENERATED future set @{text UAF_Phi_fixed_gen}.\<close>
 
 text \<open>The program variables / registers used (Core: @{typ var} = @{typ reg} =
   @{typ string}).\<close>
@@ -131,13 +120,8 @@ section \<open>The future sets @{text Phi_uaf} / @{text Phi_uaf_fixed} (EventStr
 
 text \<open>Each execution's edge-set is rendered over @{typ elabel} via @{term ev0}
   (every event here is a single leading sub-event @{text "#0"}).  These are the
-  mordor-rendered edge-sets of the generated bug / fixed digests, retyped.
-
-  An abbreviation for a single edge over the two instruction-labels' @{text "#0"}
-  sub-events.\<close>
-
-abbreviation edge :: "iloc \<Rightarrow> iloc \<Rightarrow> (elabel \<times> elabel)" where
-  "edge a b \<equiv> (ev0 a, ev0 b)"
+  mordor-rendered edge-sets of the generated bug / fixed digests, retyped.  The
+  @{term edge} abbreviation lives in @{text UAF_Labels}.\<close>
 
 subsection \<open>@{text Phi_uaf} (the bug)\<close>
 
@@ -224,44 +208,45 @@ definition Phi_uaf_fixed :: Phi where
 
 
 subsection \<open>@{text Phi_uaf_fixed_hs} -- the fix Phi ENRICHED with the cross-thread
-  handshake DP edge\<close>
+  handshake DP edge (now GENERATED, not hand-asserted)\<close>
 
 text \<open>The provisional, single-program mordor render @{term Phi_uaf_fixed} omits the
   cross-thread synchronizes-with / DP dependence the release/acquire RCU handshake
   creates between the reader and the reclaimer (see the HONESTY NOTE below and the
   machine-checked counter-fact @{text uaf_config_fixed_horizon_counterexample}).
-  Concretely, the fixed program's
-  reader lowers @{text rcu} with a RELEASE write at @{text "t1.3"} and the
-  reclaimer reads @{text rcu} at @{text "t0.1"}; for the reclaimer to OBSERVE the
-  quiescent value @{text 0} that takes its @{text "rtemp = 0"} branch (the branch
-  that frees @{text rC}), its read @{text "t0.1#0"} must be ordered AFTER the
-  release @{text "t1.3#0"} that produced that value -- the release-acquire
-  ``release sequence'' / reads-from-then-sequenced dependence.  That is the edge
+  Concretely, the fixed program's reader lowers @{text rcu} with a RELEASE write at
+  @{text "t1.3"} and the reclaimer reads @{text rcu} at @{text "t0.1"}; for the
+  reclaimer to OBSERVE the quiescent value @{text 0} that takes its @{text "rtemp =
+  0"} branch (the branch that frees @{text rC}), its read @{text "t0.1#0"} must be
+  ordered AFTER the release @{text "t1.3#0"} that produced that value.  That is the
+  edge
 
       @{text "t1.3#0 -> t0.1#0"}   (release-exit  ->  reclaimer-read)
 
   the proper cross-thread @{text "ppo \<union> DP"} carries but the single-program
-  @{term futures} rendering does not emit.  We enrich every future of the fix with
-  this edge.  (The no-free future @{term Phi_uaf_fixed_exec0} has no reclaimer read
-  to order, so the edge is vacuous there; we still add it uniformly.)
+  @{term futures} rendering does not emit.
 
-  With this edge in place the reclaimer's read inherits, transitively through the
-  already-present deref->exit ppo edge @{text "t1.2#0 -> t1.3#0"}, a dependence on
-  the DEREF @{text "t1.2#0"}: any history that has committed the reclaimer read
-  @{text "t0.1#0"} consistently must also have committed the release and hence the
-  deref.  That is exactly what excludes the use-after-free.\<close>
+  This edge is now DERIVED, not hand-asserted: @{term \<Phi>_uaf_bug_fixed} (in the
+  generated theory @{text UAF_Phi_fixed_gen}) is rendered by @{text
+  "scripts/generate_phi.py --core --executions"}, which adds the handshake edge from
+  mordor's per-execution reads-from relation (release-class writer) -- present
+  exactly in the free-bearing execution.  We take @{term Phi_uaf_fixed_hs} to BE
+  that generated future set; the proof below operates on it.  (Note the generated
+  @{term \<Phi>_uaf_bug_fixed_exec0} is the un-enriched edge-set -- the free-less
+  execution has no reclaimer read to order, so no edge is added there, which is more
+  faithful than uniform enrichment.)\<close>
 
 definition handshake_edge :: "(elabel \<times> elabel)" where
   "handshake_edge = edge (t1_il 3) (t0_il 1)"   \<comment> \<open>@{text "t1.3#0 -> t0.1#0"}\<close>
 
 definition Phi_uaf_fixed_hs_exec0 :: future where
-  "Phi_uaf_fixed_hs_exec0 = insert handshake_edge Phi_uaf_fixed_exec0"
+  "Phi_uaf_fixed_hs_exec0 = \<Phi>_uaf_bug_fixed_exec0"   \<comment> \<open>generated (un-enriched)\<close>
 
 definition Phi_uaf_fixed_hs_exec1 :: future where
-  "Phi_uaf_fixed_hs_exec1 = insert handshake_edge Phi_uaf_fixed_exec1"
+  "Phi_uaf_fixed_hs_exec1 = \<Phi>_uaf_bug_fixed_exec1"   \<comment> \<open>generated (carries the handshake)\<close>
 
 definition Phi_uaf_fixed_hs :: Phi where
-  "Phi_uaf_fixed_hs = { Phi_uaf_fixed_hs_exec0, Phi_uaf_fixed_hs_exec1 }"
+  "Phi_uaf_fixed_hs = \<Phi>_uaf_bug_fixed"
 
 
 section \<open>The UAF configuration predicate\<close>
@@ -768,21 +753,22 @@ lemma future_labels_fixed_hs_exec1:
   "future_labels Phi_uaf_fixed_hs_exec1 =
      { ev0 (g_il 1), ev0 (g_il 2), ev0 (t0_il 1), ev0 (t0_il 3),
        ev0 (t1_il 1), ev0 (t1_il 2), ev0 (t1_il 3) }"
-  by (auto simp: Phi_uaf_fixed_hs_exec1_def Phi_uaf_fixed_exec1_def
-                 handshake_edge_def future_labels_def ev0_eq_iff)
+  by (auto simp: Phi_uaf_fixed_hs_exec1_def \<Phi>_uaf_bug_fixed_exec1_def
+                 future_labels_def ev0_eq_iff)
 
 text \<open>The free is the free only in the enriched exec1 (exec0 carries no free).\<close>
 lemma free_not_in_fixed_hs_exec0:
   "ev0 (t0_il 3) \<notin> future_labels Phi_uaf_fixed_hs_exec0"
-  by (auto simp: Phi_uaf_fixed_hs_exec0_def Phi_uaf_fixed_exec0_def
-                 handshake_edge_def future_labels_def ev0_eq_iff)
+  by (auto simp: Phi_uaf_fixed_hs_exec0_def \<Phi>_uaf_bug_fixed_exec0_def
+                 future_labels_def ev0_eq_iff)
 
 lemma free_only_in_fixed_hs_exec1:
   assumes "ev0 (t0_il 3) \<in> future_labels F" and "F \<in> Phi_uaf_fixed_hs"
   shows "F = Phi_uaf_fixed_hs_exec1"
 proof -
   from assms(2) have "F = Phi_uaf_fixed_hs_exec0 \<or> F = Phi_uaf_fixed_hs_exec1"
-    by (simp add: Phi_uaf_fixed_hs_def)
+    by (simp add: Phi_uaf_fixed_hs_def \<Phi>_uaf_bug_fixed_def
+                  Phi_uaf_fixed_hs_exec0_def Phi_uaf_fixed_hs_exec1_def)
   with assms(1) free_not_in_fixed_hs_exec0 show ?thesis by blast
 qed
 
@@ -794,8 +780,7 @@ lemma fixed_hs_exec1_edges:
   "edge (t0_il 1) (t0_il 3) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>read  -> free\<close>
   "edge (t1_il 3) (t0_il 1) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>release -> read (handshake)\<close>
   "edge (t1_il 2) (t1_il 3) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>deref -> release (ppo)\<close>
-  by (simp_all add: Phi_uaf_fixed_hs_exec1_def Phi_uaf_fixed_exec1_def
-                    handshake_edge_def)
+  by (simp_all add: Phi_uaf_fixed_hs_exec1_def \<Phi>_uaf_bug_fixed_exec1_def)
 
 text \<open>HORIZON-LEVEL EXCLUSION over the enriched Phi: there is NO history at which the
   free is enabled while the deref is pending.  This is strictly stronger than the

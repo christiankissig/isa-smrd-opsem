@@ -28,4 +28,6 @@ session UAF_Bug = OpSem +
     "EventStruct"
     "OpSem"
   theories
+    UAF_Labels
+    UAF_Phi_fixed_gen
     UAF_Bug
