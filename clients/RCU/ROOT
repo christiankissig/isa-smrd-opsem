@@ -27,4 +27,6 @@ session RCU_Client = OpSem +
     "EventStruct"
     "OpSem"
   theories
+    RCU_Labels
+    RCU_Phi_gen
     RCU_Client
