@@ -12,8 +12,9 @@ prog, Φ ⊢ (σ, ρ, H) → (σ', ρ', H')
 ```
 
 The development is a **stack of self-contained, reusable Isabelle sessions**, several
-intended for the **Archive of Formal Proofs (AFP)**, with Φ generated from the **mordor**
-event-structure tool. It replaces an earlier monolithic proof that encoded futures as an
+intended for the **Archive of Formal Proofs (AFP)**, with Φ generated from the
+[**mordor**](https://github.com/christiankissig/mordor) event-structure tool. It replaces an
+earlier monolithic proof that encoded futures as an
 enumerated datatype (which exploded the proof goals); that legacy development has been
 retired.
 
@@ -114,9 +115,27 @@ Makefile           build targets (above)
 
 ## The mordor → Φ bridge
 
-Φ is computed by the **mordor** tool from the SMRD event structure and rendered into Isabelle
-by `scripts/generate_phi.py`. The interchange format is specified in
-[`docs/MORDOR_ISA_FORMAT.md`](docs/MORDOR_ISA_FORMAT.md); the validated UAF bridge lives under
+The future set Φ is not hand-written: it is computed by the **mordor** event-structure tool
+(<https://github.com/christiankissig/mordor>) and rendered into Isabelle by
+`scripts/generate_phi.py`.
+
+**mordor exports futures.** Given a program (a `.lit` file), mordor's `isa` output mode
+(`src/isa_export.ml`) emits a single versioned JSON document — specified in
+[`docs/MORDOR_ISA_FORMAT.md`](docs/MORDOR_ISA_FORMAT.md) (schema v0.1) — that carries both:
+
+- the **program** (the straight-line `init` preamble plus each thread's *rolled* body, with full
+  operands, memory orders, RMW-as-one-instruction, and nested `If`/`While`/`Do`); and
+- the **futures**: `"futures": [ { "execution": N, "edges": [[e1,e2], …] }, … ]` — one edge set
+  per SMRD execution, where each edge is a `ppo ∪ DP` (preserved-program-order ∪ dependence)
+  dependence over **event-labels** of the form `<instr-label>[@<loop-id>:<iter>]#<k>`
+  (`g.N` for init scope, `tT.N` for thread `T`; `#k` is the event index within an instruction,
+  so a CAS/FAA RMW shares one instruction-label across its sub-events `#0,#1,#2`).
+
+`scripts/generate_phi.py` consumes that JSON and emits an Isabelle theory containing (1) the
+digested program as `LABEL is INSTRUCTION` entries, and (2) the future set as a concrete constant
+`Φ_<prog>` — a set of edge-sets over event-labels, one set per execution (the renderer adds the
+reflexive closure mordor omits). Keeping the Isabelle-specific notation here (not in mordor) is a
+deliberate boundary so mordor stays prover-agnostic. The validated UAF bridge artifacts live under
 `workspace/spikes/uaf-bridge/`.
 
 **Open modeling obligation.** `uaf_excluded_fixed` is proven over a Φ enriched with the
