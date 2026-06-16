@@ -691,36 +691,71 @@ def indent_block(text, prefix):
 # instead of the provisional string-labelled placeholder above.
 # --------------------------------------------------------------------------
 #
-# Event-labels map to Core terms via the shared helpers in UAF_Labels.thy:
-#   g.<seq>#0   ->  ev0 (il Init <seq>)
-#   t<t>.<seq>#0 ->  ev0 (il (Thr <t>) <seq>)
-#   ...#<k>      ->  sub (il <own> <seq>) <k>        (RMW sub-events, k>0)
-# and an edge whose endpoints are both #0 uses the `edge` abbreviation
-# (edge a b = (ev0 a, ev0 b)).  This is exactly the vocabulary the UAF proof
-# already uses, so the generated \<Phi> is definitionally the proof's \<Phi>.
-# Loop-iteration labels (with @loop:iter) are NOT yet supported here (the
-# loop-free clients UAF need them not); such a label aborts core rendering.
+# Event-labels map to Core terms via the shared helpers in the labels theory
+# (UAF_Labels / RCU_Labels), selected with --labels-import:
+#   g.<seq>#0           ->  ev0 (il Init <seq>)
+#   t<t>.<seq>#0        ->  ev0 (il (Thr <t>) <seq>)
+#   ...#<k>             ->  sub (il <own> <seq>) <k>     (RMW sub-events, k>0)
+#   g.<seq>@<lp>:<it>#<k> ->  ev_it Init <seq> <lp> <it> <k>   (loop-iteration)
+# and an edge whose endpoints are both NON-loop #0 uses the `edge` abbreviation
+# (edge a b = (ev0 a, ev0 b)).  This is exactly the vocabulary the client proofs
+# already use, so the generated \<Phi> is definitionally the proof's \<Phi>.
+# Loop-iteration labels (with @loop:iter) render via `ev_it`, whose elabel
+# records the enclosing loop (ilo_loops = [<lp>]) and the iteration
+# (el_iters = [<it>]); the labels theory must provide that helper.
+
+def _scope_owner(scope):
+    """Map an event-label scope fragment ('g' / 't<tid>') to a Core `owner` term,
+    or None if unrecognised."""
+    if scope == "g":
+        return "Init"
+    if len(scope) > 1 and scope[0] == "t" and scope[1:].isdigit():
+        return "(Thr %s)" % scope[1:]
+    return None
+
 
 def _core_iloc_term(instr, loop):
-    """Render an instruction-label (e.g. 'g.3' / 't1.3') as an `il OWN SEQ`
-    Core term, or None if it carries a loop suffix / is unrecognised."""
+    """Render a NON-loop instruction-label (e.g. 'g.3' / 't1.3') as an `il OWN
+    SEQ` Core term, or None if it carries a loop suffix / is unrecognised.
+
+    A loop suffix is intentionally NOT renderable as a plain `il` (which fixes
+    ilo_loops = []): loop-iteration event-labels go through `_core_evlabel_term`
+    / `_core_edge_term`, which use the `ev_it` helper instead.  Returning None
+    here guards against silently dropping the loop component."""
     if loop is not None:
         return None
     scope, _, seq = instr.partition(".")
     if not seq.isdigit():
         return None
-    if scope == "g":
-        return "il Init %s" % seq
-    if len(scope) > 1 and scope[0] == "t" and scope[1:].isdigit():
-        return "il (Thr %s) %s" % (scope[1:], seq)
-    return None
+    own = _scope_owner(scope)
+    if own is None:
+        return None
+    return "il %s %s" % (own, seq)
 
 
 def _core_evlabel_term(lbl):
-    """Render an event-label as a Core `elabel` term (or None)."""
+    """Render an event-label as a Core `elabel` term (or None).
+
+    Three cases:
+      * non-loop, k=0   ->  ev0 (il OWN SEQ)
+      * non-loop, k>0   ->  sub (il OWN SEQ) k
+      * loop-iteration  ->  ev_it OWN SEQ LOOP ITER k
+
+    `ev_it` (a shared helper in the labels theory) builds the elabel whose iloc
+    records the enclosing loop (ilo_loops = [LOOP]) and whose el_iters records
+    the iteration ([ITER]); see MORDOR_ISA_FORMAT.md s2/s4 for the label grammar
+    g.<seq>@<loop>:<iter>#<k>."""
     d = parse_evlabel(lbl)
     if d is None:
         return None
+    if d["loop"] is not None:
+        scope, _, seq = d["instr"].partition(".")
+        if not seq.isdigit():
+            return None
+        own = _scope_owner(scope)
+        if own is None:
+            return None
+        return "ev_it %s %s %s %s %s" % (own, seq, d["loop"], d["iter"], d["k"])
     iloc = _core_iloc_term(d["instr"], d["loop"])
     if iloc is None:
         return None
@@ -729,10 +764,13 @@ def _core_evlabel_term(lbl):
 
 
 def _core_edge_term(src, dst):
-    """Render one edge.  Both-#0 edges use the `edge` abbreviation over ilocs;
-    otherwise an explicit (elabel, elabel) pair.  None if unrenderable."""
+    """Render one edge.  A both-#0, NON-loop edge uses the `edge` abbreviation
+    over ilocs; otherwise an explicit (elabel, elabel) pair built from
+    `_core_evlabel_term` (which handles loop-iteration labels via `ev_it`).
+    None if unrenderable."""
     ds, dt = parse_evlabel(src), parse_evlabel(dst)
-    if ds and dt and ds["k"] == "0" and dt["k"] == "0":
+    if (ds and dt and ds["k"] == "0" and dt["k"] == "0"
+            and ds["loop"] is None and dt["loop"] is None):
         il_s = _core_iloc_term(ds["instr"], ds["loop"])
         il_t = _core_iloc_term(dt["instr"], dt["loop"])
         if il_s and il_t:
@@ -793,8 +831,8 @@ def render_core_phi(doc, theory_name, derived_edges=None, labels_import="UAF_Lab
         for (s, t) in edges:
             term = _core_edge_term(s, t)
             if term is None:
-                raise ValueError("cannot render core edge %s -> %s (loop label "
-                                 "or unrecognised; --core is loop-free only)"
+                raise ValueError("cannot render core edge %s -> %s "
+                                 "(unrecognised event-label grammar)"
                                  % (s, t))
             rows.append("  " + term)
         if applied:

@@ -51,7 +51,7 @@
 *)
 
 theory RCU_Client
-  imports "OpSem.OpSem"
+  imports "OpSem.OpSem" RCU_Labels RCU_Phi_gen
 begin
 
 section \<open>Owners, labels, variables, registers\<close>
@@ -60,22 +60,12 @@ text \<open>One reclaiming worker thread @{term "Thr 0"} (the RCU reader/updater
   inc()), plus the init preamble @{term Init} (mordor @{text g}).  A single worker
   is enough to exhibit the inc() critical-section shape over the real types; the
   digests carry three symmetric workers (t0/t1/t2), added by replicating the body
-  with a different @{typ owner}.\<close>
+  with a different @{typ owner}.
 
-definition il :: "owner \<Rightarrow> nat \<Rightarrow> iloc" where
-  "il own s = \<lparr> ilo_owner = own, ilo_seq = s, ilo_loops = [] \<rparr>"
-
-text \<open>An instruction-label INSIDE loop @{term lp} (the rolled @{term While} body):
-  same owner / seq, but recording the enclosing loop.\<close>
-definition il_in :: "owner \<Rightarrow> nat \<Rightarrow> loopid \<Rightarrow> iloc" where
-  "il_in own s lp = \<lparr> ilo_owner = own, ilo_seq = s, ilo_loops = [lp] \<rparr>"
-
-abbreviation "g_il s   \<equiv> il Init s"
-abbreviation "t0_il s  \<equiv> il (Thr 0) s"
-
-text \<open>The leading event-label @{text "l#0"} of an instruction-label.\<close>
-definition ev0 :: "iloc \<Rightarrow> elabel" where
-  "ev0 l = sub l 0"
+  The label-encoding helpers @{term il} / @{term il_in} / @{term ev0} /
+  @{term edge} / @{term ev_it} (and the @{term g_il} / @{term t0_il}
+  abbreviations) live in @{text RCU_Labels} (imported above), shared with the
+  GENERATED future set @{text RCU_Phi_gen}.\<close>
 
 text \<open>The program variables and registers (Core: @{typ var} = @{typ reg} =
   @{typ string}).  Operand-generic: these are ordinary names, NOT baked-in
@@ -238,10 +228,8 @@ text \<open>The full RCU @{term Phi} (the mordor future set, with the retry/poll
   plugs into the OpSem step relation we use a single small future containing the two
   preamble events with one program-order edge @{text "g.1#0 -> g.2#0"} -- exactly
   the @{term horizon_lbls} pattern the UAF client uses.  This is a structural smoke test
-  of the data-as-program wiring, NOT a safety claim.\<close>
-
-abbreviation edge :: "iloc \<Rightarrow> iloc \<Rightarrow> (elabel \<times> elabel)" where
-  "edge a b \<equiv> (ev0 a, ev0 b)"
+  of the data-as-program wiring, NOT a safety claim.  (The @{term edge}
+  abbreviation lives in @{text RCU_Labels}.)\<close>
 
 text \<open>The one-future preamble @{term Phi}: a single program-order edge from the rcu
   alloc to its publishing write.\<close>
@@ -368,6 +356,155 @@ proof -
   have r2: "R (\<sigma>2, \<rho>2, H2)"
     unfolding R_def using r1[unfolded R_def] s2 by (rule opsem_client.reachable_step)
   show ?thesis using r2[unfolded R_def] h2 by blast
+qed
+
+
+section \<open>Use-after-free exclusion over the mordor-DERIVED loop @{term "\<Phi>_rcuincreclaim"}\<close>
+
+text \<open>This is the primary deliverable: a use-after-free EXCLUSION over the
+  GENERATED future set @{term \<Phi>_rcuincreclaim} (from @{text RCU_Phi_gen}, rendered
+  by @{text "scripts/generate_phi.py --core"} from the mordor isa-mode fixture
+  @{text "workspace/spikes/rcu/rcu-inc-reclaim_isa_sc2.json"}), NOT a hand-built
+  Phi.  It mirrors the UAF client's horizon argument
+  (@{text uaf_config_excluded_fixed_hs_horizon}).
+
+  SCOPE (honest).  This is the SINGLE-THREAD inc()+reclaim analogue: one RCU
+  updater running the inc() retry loop followed by a reclaim-free, all in the init
+  scope (mordor labels @{text "g.*"}, retry loop id @{text 1}).  The mordor sc2
+  futures already carry the intra-thread @{text "ppo \<union> DP"} ordering edge
+  deref @{text "->"} free DIRECTLY, in EVERY free-bearing execution, so NO
+  rf-enrichment is needed for this exclusion.  The full 3-thread cross-thread RCU
+  no-UAF result is NOT claimed here (it needs a terminating multi-thread
+  @{text "\<Phi>_RCU"} mordor does not produce).\<close>
+
+text \<open>The three labels of the generated fixture the argument turns on, in the
+  fixture's OWN label space (@{text "g.*"}, @{term Init}, loop @{text 1}):
+
+    free  = @{text "g.18#0"}      (the reclaim @{term Free}, inside @{text "If g.17"})
+    deref = @{text "g.12@1:1#0"}  (the @{term Faa} snapshot read, INSIDE the retry
+                                   loop, iteration 1, sub-event #0)
+    exit  = @{text "g.16#0"}      (the rcu-exit RELEASE write).
+
+  The free / deref are rendered with EXACTLY the helpers the generated @{term
+  \<Phi>_rcuincreclaim} uses (@{term ev0} / @{term ev_it}), so they are definitionally
+  the labels appearing in its edge-sets.\<close>
+
+definition rcu_gen_free  :: elabel where
+  "rcu_gen_free  = ev0 (il Init 18)"          \<comment> \<open>@{text "g.18#0"}\<close>
+definition rcu_gen_deref :: elabel where
+  "rcu_gen_deref = ev_it Init 12 1 1 0"        \<comment> \<open>@{text "g.12@1:1#0"}\<close>
+definition rcu_gen_exit  :: elabel where
+  "rcu_gen_exit  = ev0 (il Init 16)"          \<comment> \<open>@{text "g.16#0"}\<close>
+
+text \<open>The deref (a loop-iteration label, @{term ev_it}) and the free (a loop-free
+  @{term ev0} label) are DISTINCT: their ilocs differ in @{term ilo_loops}
+  (@{text "[1]"} vs @{text "[]"}) and their elabels in @{term el_iters}
+  (@{text "[1]"} vs @{text "[]"}).\<close>
+lemma rcu_gen_deref_neq_free: "rcu_gen_deref \<noteq> rcu_gen_free"
+  by (simp add: rcu_gen_deref_def rcu_gen_free_def ev_it_def ev0_def sub_def
+                il_in_def il_def)
+
+
+subsection \<open>The deref @{text "\<rightarrow>"} free edge is present in EVERY generated future\<close>
+
+text \<open>The crux structural fact, read directly off @{term \<Phi>_rcuincreclaim}: in EVERY
+  execution's edge-set the intra-thread @{text "ppo \<union> DP"} edge
+  @{text "g.12@1:1#0 \<rightarrow> g.18#0"} (deref before free) is present.  This is the
+  mordor-derived dependence that orders the read-side deref before the reclaim, and
+  it is what excludes the UAF.\<close>
+lemma deref_free_edge_in_all_gen:
+  "\<forall>F \<in> \<Phi>_rcuincreclaim. (rcu_gen_deref, rcu_gen_free) \<in> F"
+  unfolding \<Phi>_rcuincreclaim_def rcu_gen_deref_def rcu_gen_free_def
+  by (simp add:
+        \<Phi>_rcuincreclaim_exec0_def \<Phi>_rcuincreclaim_exec1_def
+        \<Phi>_rcuincreclaim_exec2_def \<Phi>_rcuincreclaim_exec3_def
+        \<Phi>_rcuincreclaim_exec4_def \<Phi>_rcuincreclaim_exec5_def
+        \<Phi>_rcuincreclaim_exec6_def \<Phi>_rcuincreclaim_exec7_def
+        \<Phi>_rcuincreclaim_exec8_def \<Phi>_rcuincreclaim_exec9_def
+        \<Phi>_rcuincreclaim_exec10_def \<Phi>_rcuincreclaim_exec11_def
+        \<Phi>_rcuincreclaim_exec12_def \<Phi>_rcuincreclaim_exec13_def
+        \<Phi>_rcuincreclaim_exec14_def \<Phi>_rcuincreclaim_exec15_def
+        \<Phi>_rcuincreclaim_exec16_def \<Phi>_rcuincreclaim_exec17_def)
+
+
+subsection \<open>The RCU UAF configuration predicate (mirroring the UAF client)\<close>
+
+text \<open>As in @{text UAF_Bug}: a UAF config is one where the @{term Free} is ENABLED
+  in the horizon (its leading label is reachable-next) while the read-side deref is
+  still PENDING (uncommitted).  The free / deref are elabels here (the generated
+  deref is a loop-iteration @{term ev_it} label, so we take the labels directly
+  rather than ilocs).\<close>
+
+definition rcu_free_enabled :: "Phi \<Rightarrow> elabel \<Rightarrow> history \<Rightarrow> bool" where
+  "rcu_free_enabled Phi free_l H \<longleftrightarrow> free_l \<in> horizon_lbls Phi H"
+
+definition rcu_deref_pending :: "elabel \<Rightarrow> history \<Rightarrow> bool" where
+  "rcu_deref_pending deref_l H \<longleftrightarrow> deref_l \<notin> hist_labels H"
+
+definition rcu_config :: "Phi \<Rightarrow> elabel \<Rightarrow> elabel \<Rightarrow> config \<Rightarrow> bool" where
+  "rcu_config Phi free_l deref_l cfg \<longleftrightarrow>
+     (let (\<sigma>, \<rho>, H) = cfg
+      in rcu_free_enabled Phi free_l H \<and> rcu_deref_pending deref_l H)"
+
+
+subsection \<open>Horizon-level exclusion over the generated @{term "\<Phi>_rcuincreclaim"}\<close>
+
+text \<open>HORIZON-LEVEL EXCLUSION: there is NO history at which the free
+  @{term rcu_gen_free} is enabled while the deref @{term rcu_gen_deref} is pending.
+  The free is in the horizon only via some consistent future of
+  @{term \<Phi>_rcuincreclaim} enabling it; but EVERY future of @{term \<Phi>_rcuincreclaim}
+  carries the edge deref @{text "\<rightarrow>"} free (@{thm deref_free_edge_in_all_gen}), so
+  enabledness of the free commits the deref -- contradicting deref-pending.  This
+  is strictly stronger than a reachability statement (it holds at EVERY config).\<close>
+lemma rcu_config_excluded_horizon:
+  "\<not> rcu_config \<Phi>_rcuincreclaim rcu_gen_free rcu_gen_deref (\<sigma>, \<rho>, H)"
+proof
+  assume "rcu_config \<Phi>_rcuincreclaim rcu_gen_free rcu_gen_deref (\<sigma>, \<rho>, H)"
+  hence fe: "rcu_free_enabled \<Phi>_rcuincreclaim rcu_gen_free H"
+    and dp: "rcu_deref_pending rcu_gen_deref H"
+    by (simp_all add: rcu_config_def)
+  \<comment> \<open>The free is in the horizon: some consistent future enables it.\<close>
+  from fe have "rcu_gen_free \<in> horizon_lbls \<Phi>_rcuincreclaim H"
+    by (simp add: rcu_free_enabled_def)
+  then obtain F where F_Phi: "F \<in> \<Phi>_rcuincreclaim"
+    and F_en: "rcu_gen_free \<in> enabled_in F H"
+    by (auto simp: horizon_lbls_def)
+  \<comment> \<open>Enabledness commits ALL predecessors of the free in F.\<close>
+  from F_en have free_preds:
+    "\<forall>p. (p, rcu_gen_free) \<in> F \<longrightarrow> p \<in> hist_labels H"
+    by (simp add: enabled_in_def)
+  \<comment> \<open>The deref @{text "\<rightarrow>"} free edge is in F (every generated future carries it).\<close>
+  from deref_free_edge_in_all_gen F_Phi
+  have "(rcu_gen_deref, rcu_gen_free) \<in> F" by blast
+  with free_preds have deref_in: "rcu_gen_deref \<in> hist_labels H" by blast
+  \<comment> \<open>But the deref is asserted PENDING -- contradiction.\<close>
+  from dp have "rcu_gen_deref \<notin> hist_labels H"
+    by (simp add: rcu_deref_pending_def)
+  with deref_in show False by contradiction
+qed
+
+
+subsection \<open>Top-level: the RCU use-after-free is EXCLUDED over the generated Phi\<close>
+
+text \<open>The top-level exclusion theorem, over the mordor-DERIVED loop future set
+  @{term \<Phi>_rcuincreclaim}: NO reachable config of @{term prog_RCU} paired with
+  @{term \<Phi>_rcuincreclaim} is an RCU UAF config (free enabled, deref pending).
+  Immediate from the (stronger) horizon-level exclusion, which holds at EVERY
+  config.
+
+  This is the derived-Phi analogue of @{text UAF_Bug.uaf_excluded_fixed}; the
+  @{term rcu_config} predicate is the same free-enabled / deref-pending shape, and
+  the future set is the GENERATED @{term \<Phi>_rcuincreclaim}, not a hand-built one.\<close>
+theorem rcu_excluded:
+  "\<not> (\<exists>cfg. opsem_client.reachable prog_RCU \<Phi>_rcuincreclaim cfg \<and>
+            rcu_config \<Phi>_rcuincreclaim rcu_gen_free rcu_gen_deref cfg)"
+proof (rule notI, elim exE conjE)
+  fix cfg
+  assume "rcu_config \<Phi>_rcuincreclaim rcu_gen_free rcu_gen_deref cfg"
+  moreover obtain \<sigma> \<rho> H where "cfg = (\<sigma>, \<rho>, H)"
+    by (cases cfg) auto
+  ultimately show False
+    using rcu_config_excluded_horizon by simp
 qed
 
 end
