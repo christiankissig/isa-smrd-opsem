@@ -1,8 +1,8 @@
 (*  Title:      OpSem/OpSem.thy
     Author:     RCU-C11-OpSem project (Episodic stack, layer 4: OpSem-min)
 
-    OpSem-min (REWORK_PLAN Phase 3a / workstream W8a): the NON-LOOP fragment of the
-    Episodic operational semantics.  This file provides
+    OpSem (REWORK_PLAN Phase 3a + 3b / workstreams W8a and W8b): the Episodic
+    operational semantics.  This file provides
 
       1. the command/effect bridge -- a generic per-command effect that, for a
          command instance `(l is c)`, emits its labelled action sequence (reusing
@@ -11,18 +11,42 @@
       2. the operational configuration `(sigma, rho, H)` -- `sigma` the MemSem
          `mstate`, `rho` the register/local environment, `H` the EventStruct
          `history` (an `event set`);
-      3. the inductive `step prog Phi` relation with the NON-LOOP rules ONLY: a
-         non-branch step, a then-branch and an else-branch.  A labelled command is
-         taken only if its instruction-label is enabled, `(l : abar) \<in>* horizon
-         Phi H`, applying the action effects to `sigma`, updating `rho`, and
-         extending `H` with the committed event(s);
+      3. the inductive `step prog Phi` relation with the straight-line / RMW step,
+         the then/else branch rules, AND the W8b loop rules (`Loop` / `LoopExit`).
+         A labelled command is taken only if its instruction-label is enabled,
+         `(l : abar) \<in>* horizon Phi H`, applying the action effects to `sigma`,
+         updating `rho`, and extending `H` with the committed event(s);
       4. a client locale `fixes prog Phi` and a `reachable` predicate (the
          reflexive-transitive closure of `step` from an initial config).
 
-    DELIBERATELY EXCLUDED (milestone 3b / W8b, RCU-only): the `lb`-reset rule, the
-    per-loop `sigma|^t_{\<ell>}` restriction, the iteration-indexed phi reset, and the
-    episodicity meta-properties.  This fragment is loop-free and is exactly what the
-    UAF client (`uaf-bug{,-fixed}.lit`, no loops) needs.
+    W8b (milestone 3b) -- the `While` / lb-reset loop rules ADDED here:
+
+      * `Loop`     -- the guard `b` of `(l is While lp b body)` holds along the
+        path predicate and `l`'s guard label is in the horizon: commit the guard
+        event `Branch (subst_expr rho b)` at `sub l 0`, exactly as `Then` commits
+        an `IfElse` guard.  The body of the loop is NESTED (not in `set prg`) and
+        is NOT stepped here; its events become enabled THROUGH the horizon at the
+        representative iteration window (see the restriction note below).
+      * `LoopExit` -- symmetric: the guard fails, commit `Branch (ENot ...)` and
+        leave the loop.
+
+    RESTRICTION vs full paper faithfulness (documented, not overclaimed).  The
+    paper's lb-reset RELABELS the loop body per iteration (`el_iters` advances by
+    one per back-edge) instead of UNROLLING into unboundedly many iterations.  The
+    project's validated episodicity finding (mordor on `rcu-inc-loop.lit`,
+    EventStruct `episodic` / `episodic_future`) is that an episodic Phi collapses
+    every loop to a SINGLE representative iteration window: the `el_iters`
+    component is degenerate, so the representative window suffices and unrolling is
+    unnecessary.  Accordingly these rules commit the guard at the representative
+    window `sub l 0` (matching `Then`/`Else`, whose committed labels also carry the
+    degenerate `el_iters = []`) and do NOT unroll.  What is NOT yet modelled here:
+    an explicit per-back-edge `el_iters` increment and the per-loop
+    `sigma|^t_{\<ell>}` state restriction; under episodicity those are degenerate, so
+    omitting them is sound (it admits no extra behaviours -- the guard commit is
+    observation-only, `apply_action _ (Branch _)` leaves the alloc/memory state of
+    sigma fixed and only narrows `phi`).  The episodicity meta-properties that
+    JUSTIFY the single-window collapse live in EventStruct (`episodic_future`,
+    `loop_free_episodic`).
 
     Depends on MemSem (sigma + action effects) and EventStruct (Phi + horizon),
     both session-qualified.
@@ -194,7 +218,7 @@ definition horizon_label :: "iloc \<Rightarrow> elabel" where
   "horizon_label l = sub l 0"
 
 text \<open>The inductive future-stepping relation @{text "prog, Phi \<turnstile> (sigma,rho,H) \<rightarrow>
-  (sigma',rho',H')"}.  Three NON-LOOP rules:
+  (sigma',rho',H')"}.  Five rules:
 
   \<^item> @{text Step} -- a straight-line (non-branch, non-loop) command whose label is
     enabled in @{text "horizon Phi H"} fires: resolve its effect, apply the action
@@ -205,13 +229,18 @@ text \<open>The inductive future-stepping relation @{text "prog, Phi \<turnstile
     instruction's effect.
   \<^item> @{text Else} -- symmetric, committing the negated guard and proceeding into the
     ELSE body.
+  \<^item> @{text Loop} -- (W8b) a @{term While} whose guard the path predicate admits:
+    commit the guard as a @{term Branch} event at @{text "l#0"}, exactly as
+    @{text Then}.  The body is NESTED (not in @{term "set prg"}) and is NOT stepped
+    here; under episodicity it is enabled through the horizon at the representative
+    single-iteration window (the lb-reset collapses iterations rather than
+    unrolling -- see the header comment).
+  \<^item> @{text LoopExit} -- (W8b) symmetric: the guard fails, commit the negated guard
+    @{text "Branch (ENot \<dots>)"} and leave the loop.
 
-  NO @{text lb}-reset rule and NO episodicity machinery (milestone 3b / W8b).
-
-  The guard event for a branch carries the label @{text "l#0"} of the @{term IfElse}
-  instruction; the chosen body's first instruction provides the continuation, looked
-  up through @{term prog}.  We thread @{term prog} only to fetch the program text;
-  the horizon gate uses the @{term IfElse}'s own label.\<close>
+  The guard event for a branch / loop carries the label @{text "l#0"} of the
+  @{term IfElse} / @{term While} instruction; the horizon gate uses that
+  instruction's own label.  We thread @{term prog} only to fetch the program text.\<close>
 
 inductive
   step :: "program \<Rightarrow> Phi \<Rightarrow> config \<Rightarrow> config \<Rightarrow> bool"
@@ -245,9 +274,29 @@ where
        \<sigma>' = apply_action (sub l 0) gact \<sigma>;
        H' = commit_events [(sub l 0, gact)] H \<rbrakk>
      \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"
+| Loop:
+    \<comment> \<open>(W8b) @{term While} guard holds (enter / iterate): commit the loop guard
+        @{term "Branch (subst_expr \<rho> b)"} at the representative window @{text "l#0"}.
+        The nested body is enabled through the horizon, not stepped here.\<close>
+    "\<lbrakk> (l is While lp b body) \<in> set prg;
+       gact = Branch (subst_expr \<rho> b);
+       in_horizon (horizon_label l) [gact] Phi H;
+       holds (SOME e. e \<in> phi \<sigma>) (subst_expr \<rho> b);
+       \<sigma>' = apply_action (sub l 0) gact \<sigma>;
+       H' = commit_events [(sub l 0, gact)] H \<rbrakk>
+     \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"
+| LoopExit:
+    \<comment> \<open>(W8b) @{term While} guard fails (exit): commit the negated guard and leave.\<close>
+    "\<lbrakk> (l is While lp b body) \<in> set prg;
+       gact = Branch (ENot (subst_expr \<rho> b));
+       in_horizon (horizon_label l) [gact] Phi H;
+       \<not> holds (SOME e. e \<in> phi \<sigma>) (subst_expr \<rho> b);
+       \<sigma>' = apply_action (sub l 0) gact \<sigma>;
+       H' = commit_events [(sub l 0, gact)] H \<rbrakk>
+     \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"
 
-text \<open>Sanity: the three rules are exactly @{text Step}, @{text Then}, @{text Else};
-  there is no @{text lb}/loop rule.\<close>
+text \<open>Sanity: the rules are @{text Step}, @{text Then}, @{text Else}, and the W8b
+  loop rules @{text Loop} / @{text LoopExit} (the @{text lb}-reset, single-window).\<close>
 
 
 section \<open>Reflexive-transitive closure and the client locale\<close>
