@@ -60,10 +60,11 @@ submission. Full rationale in [`docs/W1_owicki_gries_design.md`](docs/W1_owicki_
 
 ## Building
 
-Requires **Isabelle2025-vsce** (the [isabelle-emacs](https://github.com/m-fleury/isabelle-emacs)
-fork) with a built `HOL` heap (`isabelle build -b HOL`). The reworked layers also build on the
-official **Isabelle2025** (see CI). Theory sources use ASCII Isabelle symbol notation
-(`\<forall>`, `\<open>…\<close>`), not raw Unicode glyphs.
+Requires **Isabelle2025** (or newer) — the official release from
+<https://isabelle.in.tum.de> — with a built `HOL` heap (`isabelle build -b HOL`). This is what
+CI uses (`make ci`); no fork is needed. (The [isabelle-emacs](https://github.com/m-fleury/isabelle-emacs)
+/ `-vsce` fork still works for interactive development, but is optional.) Theory sources use
+ASCII Isabelle symbol notation (`\<forall>`, `\<open>…\<close>`), not raw Unicode glyphs.
 
 ```bash
 make all         # build the whole reworked stack (non-q&d): Core, MemSem,
