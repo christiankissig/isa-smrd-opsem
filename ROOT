@@ -1,57 +1,29 @@
-session MRD_C11_RCU = MRD_C11_OPSEM +
-  sessions
-    "HOL-Eisbach"
+(* Legacy RCU session.
+
+   SUPERSEDED by the per-layer reworked sessions (Core / MemSem / EventStruct /
+   OpSem / OwickiGries / Ownership and the clients/* sessions); see the per-layer
+   ROOT files and the Makefile.
+
+   The pre-rework RCU futures-enumeration development that this session used to
+   build (RCU_state / RCU_prog / RCU_futures / RCU_futures_inequalities /
+   RCU_wm_proofs_old_* and the I/R/S step proofs) has been RETIRED -- it was the
+   "wrong future set" (114-ctor enumeration, the I7 ~12000-sorry explosion),
+   subsumed by the Episodic spine.  The legacy SEFM imports it depended on
+   (PSem.thy, OpSem_definite.thy) have likewise been retired; the reworked
+   MemSem session folds their content in (see MemSem/MemSem.thy).
+
+   What survives in clients/RCU are the two GENERATED mordor digests
+   (RCU_prog_digest, RCU_inc_loop_digest) -- the structural source-of-truth for
+   the reworked RCU client.  They import only Main, so this session builds them
+   for archival / reference; the real RCU client is being rebuilt in the spine
+   style over the Core/OpSem types. *)
+
+session MRD_C11_RCU = "HOL" +
   directories
-    "MemSem"
     "clients/RCU"
   theories
-    PSem
-    OpSem_definite
-    (*
-    RCU_atomics
-    RCU_futures
-    RCU_mrd
-    RCU_prog
-    RCU_state
-    RCU_maininvs
-    RCU_wm_prelim
-    RCU_wm_preblock
-    RCU_wm_proofs
-    RCU_wm_proofs_old
-    RCU_I_steps
-    RCU_R_steps
-    RCU_S_steps
-    RCU_steps_unified
+    RCU_prog_digest
+    RCU_inc_loop_digest
 
-    RCU_wm_proofs_old_cas_res_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_finished_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I10_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I11_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I12_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I13_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I14_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I1_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I2_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I3_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I4_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I5_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I6_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I7_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I8_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_I9_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_R1_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_R2_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_R3_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_R4_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_R5_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_S1_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_S2_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_S3_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_S4_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_S5_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_S6_preserves_pre_block_global_pre
-    RCU_wm_proofs_old_S7_preserves_pre_block_global_pre
-*)
-
-  export_files 
+  export_files
     "./"
