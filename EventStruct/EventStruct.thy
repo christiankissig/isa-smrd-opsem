@@ -282,8 +282,19 @@ definition future_loop_iters :: "future \<Rightarrow> loopid \<Rightarrow> iter 
   "future_loop_iters F lp =
      {i. \<exists>l \<in> future_labels F. iterf l lp = Some i}"
 
+text \<open>An episodic future assigns AT MOST ONE iteration value to each loop across
+  its labels.  We state this as @{term finite} together with @{text "card \<le> 1"}:
+  the finiteness conjunct is essential, because @{term card} collapses every
+  INFINITE set to @{text 0}, so a bare @{text "card \<dots> \<le> 1"} would be silently
+  satisfied by a future that mentions infinitely many iterations of a loop -- the
+  exact opposite of ``single posterior iteration''.  With finiteness in hand the
+  predicate genuinely means ``at most one iteration per loop'', which is what the
+  @{text lb}-reset / single-iteration-window argument below relies on.  (For the
+  episodic clients UAF and RCU each future is a finite edge set, so the finiteness
+  conjunct is discharged for free.)\<close>
 definition episodic_future :: "future \<Rightarrow> bool" where
-  "episodic_future F \<longleftrightarrow> (\<forall>lp. card (future_loop_iters F lp) \<le> 1)"
+  "episodic_future F \<longleftrightarrow>
+     (\<forall>lp. finite (future_loop_iters F lp) \<and> card (future_loop_iters F lp) \<le> 1)"
 
 definition episodic :: "Phi \<Rightarrow> bool" where
   "episodic Phi \<longleftrightarrow> (\<forall>F \<in> Phi. episodic_future F)"
@@ -313,6 +324,7 @@ proof -
     qed
     thus "future_loop_iters F lp = {}" by blast
   qed
+  \<comment> \<open>Every per-loop iteration set is empty, hence finite with cardinality @{text 0}.\<close>
   thus ?thesis by (simp add: episodic_future_def)
 qed
 
@@ -340,9 +352,22 @@ lemma episodic_single_iteration_window:
   assumes "l1 \<in> future_labels F" and "l2 \<in> future_labels F"
   assumes "iterf l1 lp = Some i1" and "iterf l2 lp = Some i2"
   shows "i1 = i2"
-  (* TODO: provable from episodic_future (card {..} <= 1) by a card/finite argument;
-     left as sorry pending the finiteness side-condition on future_loop_iters that
-     belongs with OpSem's reachable-history finiteness (Phi_RCU-gated). *)
-  sorry
+proof -
+  from \<open>episodic Phi\<close> \<open>F \<in> Phi\<close> have "episodic_future F"
+    by (simp add: episodic_def)
+  hence fin: "finite (future_loop_iters F lp)"
+    and crd: "card (future_loop_iters F lp) \<le> 1"
+    by (simp_all add: episodic_future_def)
+  \<comment> \<open>Both iterations are members of the per-loop iteration set of @{text F}.\<close>
+  from \<open>l1 \<in> future_labels F\<close> \<open>iterf l1 lp = Some i1\<close>
+  have m1: "i1 \<in> future_loop_iters F lp"
+    by (auto simp: future_loop_iters_def)
+  from \<open>l2 \<in> future_labels F\<close> \<open>iterf l2 lp = Some i2\<close>
+  have m2: "i2 \<in> future_loop_iters F lp"
+    by (auto simp: future_loop_iters_def)
+  \<comment> \<open>A finite set of cardinality at most one has all members equal.\<close>
+  from fin crd m1 m2 show "i1 = i2"
+    using card_le_Suc0_iff_eq[of "future_loop_iters F lp"] by simp
+qed
 
 end
