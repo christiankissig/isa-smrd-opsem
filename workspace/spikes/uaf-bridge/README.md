@@ -19,6 +19,21 @@ python3 spike_join.py
   cas_aba shows RMW sub-events + loop-iteration labels. Command:
   `mordor futures --single P.lit --output-mode isa --output-file P_isa.json`.
 
+## Handshake derivation (cross-thread synchronizes-with from `rf`)
+`scripts/generate_phi.py` can ENRICH Φ with the cross-thread release-handshake edges that
+single-program `futures` omits, deriving them from the `executions` JSON's reads-from relation:
+```
+scripts/generate_phi.py uaf_fixed_isa.json --executions uaf_fixed_exec.json \
+    -o generated/Prog_uaf_bug_fixed_generated.thy
+```
+Rule: for every `rf(W, R)` whose writer `W` is a release-class write, add the edge `W → R`
+(joining the executions' opaque event-ids to the isa labels by order+value / program order /
+learned location). On these fixtures this derives exactly the handshake edge `t1.3#0 → t0.1#0`
+for the **fixed** program (the `rcu:=0` Release read-from by the reclaimer's quiescence read, in
+the freeing execution) and **nothing** for the bug (its exit write is Relaxed, so its `rf` creates
+no synchronization and the UAF stays reachable). This is the edge that excludes the use-after-free
+in `clients/UAF_Bug/UAF_Bug.thy` (`uaf_excluded_fixed`) — now mordor-derived, not hand-asserted.
+
 ## Files
 - `uaf_exec.json`, `uaf_fixed_exec.json` — `executions` export: labelled events
   (`id`, `type` ∈ I/A/W/R/D/T, `location`, `rval`/`wval`, `rmod`/`wmod`, `thread`) **+**

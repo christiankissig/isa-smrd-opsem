@@ -138,14 +138,20 @@ reflexive closure mordor omits). Keeping the Isabelle-specific notation here (no
 deliberate boundary so mordor stays prover-agnostic. The validated UAF bridge artifacts live under
 `workspace/spikes/uaf-bridge/`.
 
-**Open modeling obligation.** `uaf_excluded_fixed` is proven over a Φ enriched with the
-cross-thread handshake DP edge `release-exit → reclaimer-read` (`t1.3#0 → t0.1#0`) that orders
-the reclaimer's read after the reader's release. That edge is currently **added by hand with a
-justification**, not emitted by single-program mordor `futures`; the retained
-`uaf_config_fixed_horizon_counterexample` witnesses that the un-enriched Φ cannot exclude. The
-next step is to **derive** the handshake edge in `generate_phi.py` (or via a MemSem
-branch-feasibility argument) so the exclusion is end-to-end from the generator. Driving the full
-multi-thread `Φ_RCU` to termination remains the other open task.
+**The cross-thread handshake edge is derived, not asserted.** `uaf_excluded_fixed` is proven over
+a Φ enriched with the handshake DP edge `release-exit → reclaimer-read` (`t1.3#0 → t0.1#0`) that
+orders the reclaimer's quiescence read after the reader's release. Single-program mordor `futures`
+does not emit this synchronizes-with edge — but mordor's per-execution **reads-from** relation
+(`rf`, in the `executions`-mode JSON) does. Given a companion executions document,
+`generate_phi.py --executions EXEC.json` **derives** the handshake edges: for every `rf(W,R)`
+whose writer `W` is a release-class write, it adds `W → R`, joining the executions' opaque
+event-ids to the isa event-labels. This is execution-faithful (it uses mordor's computed `rf`, not
+a structural guess) and selects exactly the synchronizing subset — the buggy variant's exit write
+is relaxed, so it gains no edge and stays reachable. On the UAF fixtures this reproduces precisely
+`t1.3#0 → t0.1#0` for the fixed program (in the freeing execution) and nothing for the bug. The
+remaining theory-side step is to consume this generated Φ directly in `UAF_Bug.thy` (it currently
+hand-defines the same edge over Core types). Driving the full multi-thread `Φ_RCU` to termination
+remains the other open task.
 
 ## Documentation
 

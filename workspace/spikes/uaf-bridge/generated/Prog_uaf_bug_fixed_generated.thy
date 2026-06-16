@@ -13,8 +13,15 @@
     * provisional encoding types (WIP, to be replaced by Spike B Core types)
     * the digested program: per-thread `LABEL is INSTRUCTION` lists
     * \<Phi>_uaf_bug_fixed : the future set, one edge-set over event-labels per execution
+      (ENRICHED with cross-thread release-handshake edges derived from a
+       companion executions-mode JSON's reads-from relation -- see below)
 
   Notes / faithfulness:
+    * Cross-thread release HANDSHAKE edges (W -> R) are DERIVED from
+      mordor's per-execution reads-from (release-class writer) and added
+      to \<Phi>; single-program `futures` does not emit these synchronizes-
+      with edges.  Each derived edge is flagged with an inline `text` note
+      on the execution it augments (added only where both endpoints occur).
     * RMW (Faa/Cas) is ONE instruction carrying several events (Faa #0,#1;
       Cas #0,#1,#2 -- the W #2 is absent on a failing CAS).
     * Loop-iteration event-labels (e.g. t0.4@1:1#0) are rendered verbatim in \<Phi>.
@@ -136,6 +143,12 @@ section \<open>Future set \<open>\<Phi>\<close>\<close>
 
 text \<open>Each execution contributes one edge-set (\<open>(ppo \<union> dp)\<close> over
   event-labels); \<open>\<Phi>_uaf_bug_fixed\<close> is the set of those edge-sets.\<close>
+text \<open>This \<open>\<Phi>\<close> is ENRICHED with cross-thread release-handshake
+  edges \<open>(W \<rightarrow> R)\<close> DERIVED from mordor's per-execution
+  reads-from relation (release-class writer); these are the
+  synchronizes-with that single-program \<open>futures\<close> omits.  Each is
+  added only to executions whose event-labels already contain both
+  endpoints, and is flagged inline below.\<close>
 
 definition \<Phi>_uaf_bug_fixed_exec0 :: "(string \<times> string) set" where
   "\<Phi>_uaf_bug_fixed_exec0 =
@@ -147,6 +160,7 @@ definition \<Phi>_uaf_bug_fixed_exec0 :: "(string \<times> string) set" where
   (''t1.2#0'', ''t1.3#0'')
   }"
 
+text \<open>exec 1: +1 derived release-handshake edge(s): t1.3#0 \<rightarrow> t0.1#0\<close>
 definition \<Phi>_uaf_bug_fixed_exec1 :: "(string \<times> string) set" where
   "\<Phi>_uaf_bug_fixed_exec1 =
   {
@@ -156,7 +170,8 @@ definition \<Phi>_uaf_bug_fixed_exec1 :: "(string \<times> string) set" where
   (''g.2#0'', ''t1.3#0''),
   (''t0.1#0'', ''t0.3#0''),
   (''t1.1#0'', ''t1.3#0''),
-  (''t1.2#0'', ''t1.3#0'')
+  (''t1.2#0'', ''t1.3#0''),
+  (''t1.3#0'', ''t0.1#0'')
   }"
 
 definition \<Phi>_uaf_bug_fixed :: "(string \<times> string) set set" where

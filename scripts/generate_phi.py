@@ -291,6 +291,184 @@ def collect_events(instrs, acc):
 
 
 # --------------------------------------------------------------------------
+# handshake derivation: cross-thread synchronizes-with from reads-from
+# --------------------------------------------------------------------------
+#
+# Single-program mordor `futures` (the isa JSON) carries only the (ppo u DP)
+# edges within the program's preserved order; it does NOT emit the cross-thread
+# synchronizes-with that a release/acquire handshake creates -- e.g. the RCU
+# reclaimer's quiescence read reading-from the reader's release-exit.  That edge
+# is, however, present in mordor's per-execution `rf` (reads-from) relation in
+# the *executions*-mode JSON.  When such a companion document is supplied
+# (--executions), we DERIVE the handshake edges rather than hand-adding them:
+#
+#   for every rf(w, r) whose writer w is a RELEASE-class write, add  w -> r.
+#
+# This is execution-faithful (it uses mordor's computed rf for that execution,
+# not a structural guess) and selects exactly the synchronizing subset: a
+# relaxed-write rf creates no ordering and is correctly excluded (which is why
+# the buggy variant, whose exit write is relaxed, gains no edge and stays
+# reachable).  The opaque executions event-ids are joined to the isa
+# event-labels by robust signatures (writes by short-order + value, allocs by
+# program order, reads by the location-name learned from those matches).
+
+# mordor `executions` memory-order spelling -> schema short order
+_EXEC_ORDER = {
+    "Relaxed": "rlx", "Acquire": "acq", "Release": "rel",
+    "AcqRel": "acq_rel", "Acq_Rel": "acq_rel", "SeqCst": "sc", "SC": "sc",
+}
+# write orders that publish a release (synchronize with a reading load)
+_RELEASE_CLASS = {"Release", "AcqRel", "Acq_Rel", "SeqCst", "SC"}
+
+
+def _ptr_name(operand):
+    """Flatten a ptr/loc/var operand to a plain location name, or None."""
+    if isinstance(operand, str):
+        return operand
+    if isinstance(operand, dict) and "reg" in operand:
+        return operand["reg"]
+    return None
+
+
+def _coerce_int(v):
+    """Best-effort int from an operand or an executions wval/rval string."""
+    if isinstance(v, bool):
+        return int(v)
+    if isinstance(v, int):
+        return v
+    if isinstance(v, dict) and "int" in v:
+        return v["int"]
+    if isinstance(v, str):
+        try:
+            return int(v)
+        except ValueError:
+            return None
+    return None
+
+
+def _event_k(ins, etype):
+    """Index k of the first event of type etype in an instruction, or None."""
+    for ev in ins.get("events", []):
+        if ev.get("type") == etype:
+            return ev["k"]
+    return None
+
+
+def _index_isa_memops(doc):
+    """Index the isa program's memory ops with their thread and W/R event index.
+
+    Walks init (thread None) + each thread body, descending into If/While/Do
+    sub-digests (which inherit the enclosing thread).  Returns
+    {writes, reads, allocs}, each a list of dicts."""
+    writes, reads, allocs = [], [], []
+
+    def walk(instrs, thread):
+        for ins in instrs:
+            cmd = ins["command"]
+            op = cmd.get("op")
+            lbl = ins["label"]
+            if op in ("WritePtr", "WriteVar"):
+                writes.append({
+                    "label": lbl, "thread": thread, "order": cmd.get("order"),
+                    "ptr": _ptr_name(cmd.get("ptr") if op == "WritePtr"
+                                     else cmd.get("var")),
+                    "val": _coerce_int(cmd.get("val")), "k": _event_k(ins, "W")})
+            elif op in ("ReadPtr", "ReadVar"):
+                reads.append({
+                    "label": lbl, "thread": thread, "order": cmd.get("order"),
+                    "ptr": _ptr_name(cmd.get("ptr") if op == "ReadPtr"
+                                     else cmd.get("var")), "k": _event_k(ins, "R")})
+            elif op in ("Faa", "Cas"):
+                writes.append({
+                    "label": lbl, "thread": thread, "order": cmd.get("order_w"),
+                    "ptr": _ptr_name(cmd.get("loc")),
+                    "val": _coerce_int(cmd.get("new") if op == "Cas"
+                                       else cmd.get("addend")),
+                    "k": _event_k(ins, "W")})
+                reads.append({
+                    "label": lbl, "thread": thread, "order": cmd.get("order_r"),
+                    "ptr": _ptr_name(cmd.get("loc")), "k": _event_k(ins, "R")})
+            elif op == "Alloc":
+                allocs.append({"label": lbl, "thread": thread,
+                               "ptr": cmd.get("dst")})
+            for key in ("then", "else", "body"):
+                if key in cmd:
+                    walk(cmd[key], thread)
+
+    walk(doc.get("init", []), None)
+    for th in doc.get("threads", []):
+        walk(th.get("body", []), th.get("tid"))
+    return {"writes": writes, "reads": reads, "allocs": allocs}
+
+
+def derive_handshake_edges(isa_doc, exec_doc):
+    """Derive cross-thread release handshake edges from mordor's rf relation.
+
+    Returns (edges, warnings): `edges` is a set of (src_label, dst_label)
+    event-label pairs (W -> R for each rf(W,R) with W a release-class write);
+    `warnings` records any rf edge whose endpoints could not be joined
+    unambiguously to the isa labels (such edges are skipped, never guessed)."""
+    warnings = []
+    memops = _index_isa_memops(isa_doc)
+
+    def match_write(order_short, val):
+        cands = [w for w in memops["writes"]
+                 if w["order"] == order_short and w["val"] == val]
+        return cands[0] if len(cands) == 1 else None
+
+    # global event table (ids are consistent across executions)
+    ev_by_id = {}
+    for ex in exec_doc.get("executions", []):
+        for ev in ex.get("events", []):
+            ev_by_id[ev["id"]] = ev
+
+    # learn exec-location-name -> isa pointer-name
+    loc2ptr = {}
+    exec_allocs = sorted((ev for ev in ev_by_id.values() if ev.get("type") == "A"),
+                         key=lambda ev: ev["id"])
+    for ev, isa_a in zip(exec_allocs, memops["allocs"]):
+        if ev.get("location") is not None and isa_a["ptr"] is not None:
+            loc2ptr.setdefault(ev["location"], isa_a["ptr"])
+    for ev in ev_by_id.values():
+        if ev.get("type") != "W":
+            continue
+        m = match_write(_EXEC_ORDER.get(ev.get("wmod")), _coerce_int(ev.get("wval")))
+        if m and ev.get("location") is not None and m["ptr"] is not None:
+            loc2ptr.setdefault(ev["location"], m["ptr"])
+
+    edges = set()
+    for ex in exec_doc.get("executions", []):
+        evmap = {ev["id"]: ev for ev in ex.get("events", [])}
+        for pair in ex.get("rf", []):
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                continue
+            w, r = evmap.get(pair[0]), evmap.get(pair[1])
+            if not w or not r or w.get("type") != "W":
+                continue
+            if w.get("wmod") not in _RELEASE_CLASS:
+                continue  # only release-class writes synchronize
+            wm = match_write(_EXEC_ORDER.get(w.get("wmod")), _coerce_int(w.get("wval")))
+            if wm is None:
+                warnings.append("release write id%s could not be mapped to a "
+                                "unique isa write" % pair[0])
+                continue
+            ptr = loc2ptr.get(r.get("location"))
+            if ptr is None:
+                warnings.append("rf reader id%s: unknown location %r"
+                                % (pair[1], r.get("location")))
+                continue
+            rcands = [rd for rd in memops["reads"]
+                      if rd["ptr"] == ptr and rd["thread"] != wm["thread"]]
+            if len(rcands) != 1:
+                warnings.append("rf reader id%s on %s: %d cross-thread isa reads "
+                                "(need exactly 1)" % (pair[1], ptr, len(rcands)))
+                continue
+            edges.add(("%s#%d" % (wm["label"], wm["k"] or 0),
+                       "%s#%d" % (rcands[0]["label"], rcands[0]["k"] or 0)))
+    return edges, warnings
+
+
+# --------------------------------------------------------------------------
 # theory assembly
 # --------------------------------------------------------------------------
 
@@ -346,7 +524,7 @@ definition entry :: "label \<Rightarrow> command \<Rightarrow> (label \<times> c
 """
 
 
-def render_theory(doc, theory_name):
+def render_theory(doc, theory_name, derived_edges=None):
     prog = doc.get("program", "prog")
     frag = sanitize(prog)
     orders = doc.get("orders", [])
@@ -371,8 +549,17 @@ def render_theory(doc, theory_name):
     a("    * provisional encoding types (WIP, to be replaced by Spike B Core types)")
     a("    * the digested program: per-thread `LABEL is INSTRUCTION` lists")
     a("    * \\<Phi>_%s : the future set, one edge-set over event-labels per execution" % frag)
+    if derived_edges:
+        a("      (ENRICHED with cross-thread release-handshake edges derived from a")
+        a("       companion executions-mode JSON's reads-from relation -- see below)")
     a("")
     a("  Notes / faithfulness:")
+    if derived_edges:
+        a("    * Cross-thread release HANDSHAKE edges (W -> R) are DERIVED from")
+        a("      mordor's per-execution reads-from (release-class writer) and added")
+        a("      to \\<Phi>; single-program `futures` does not emit these synchronizes-")
+        a("      with edges.  Each derived edge is flagged with an inline `text` note")
+        a("      on the execution it augments (added only where both endpoints occur).")
     a("    * RMW (Faa/Cas) is ONE instruction carrying several events (Faa #0,#1;")
     a("      Cas #0,#1,#2 -- the W #2 is absent on a failing CAS).")
     a("    * Loop-iteration event-labels (e.g. t0.4@1:1#0) are rendered verbatim in \\<Phi>.")
@@ -443,6 +630,13 @@ def render_theory(doc, theory_name):
     a("")
     a(r"text \<open>Each execution contributes one edge-set (\<open>(ppo \<union> dp)\<close> over")
     a(r"  event-labels); \<open>\<Phi>_%s\<close> is the set of those edge-sets.\<close>" % frag)
+    if derived_edges:
+        a(r"text \<open>This \<open>\<Phi>\<close> is ENRICHED with cross-thread release-handshake")
+        a(r"  edges \<open>(W \<rightarrow> R)\<close> DERIVED from mordor's per-execution")
+        a(r"  reads-from relation (release-class writer); these are the")
+        a(r"  synchronizes-with that single-program \<open>futures\<close> omits.  Each is")
+        a(r"  added only to executions whose event-labels already contain both")
+        a(r"  endpoints, and is flagged inline below.\<close>")
     a("")
 
     exec_defs = []
@@ -450,9 +644,20 @@ def render_theory(doc, theory_name):
         ex = fut["execution"]
         ename = "\\<Phi>_%s_exec%d" % (frag, ex)
         exec_defs.append(ename)
-        a("definition %s :: \"(string \\<times> string) set\" where" % ename)
         edges = normalise_edges(fut.get("edges", []),
                                 ctx=" (exec %s)" % ex)
+        applied = []
+        if derived_edges:
+            labels = {l for (s, t) in edges for l in (s, t)}
+            for (s, t) in sorted(derived_edges):
+                if s in labels and t in labels and (s, t) not in edges:
+                    edges.append((s, t))
+                    applied.append((s, t))
+        if applied:
+            a(r"text \<open>exec %s: +%d derived release-handshake edge(s): %s\<close>"
+              % (ex, len(applied),
+                 "; ".join("%s \\<rightarrow> %s" % e for e in applied)))
+        a("definition %s :: \"(string \\<times> string) set\" where" % ename)
         if edges:
             rows = ["  (%s, %s)" % (iss(s), iss(t)) for (s, t) in edges]
             a("  \"%s =" % ename)
@@ -490,6 +695,9 @@ def main(argv=None):
     p.add_argument("input", help="mordor isa-mode JSON document")
     p.add_argument("-o", "--output", help="output .thy file (default: stdout)")
     p.add_argument("--theory", help="Isabelle theory name (default: derived)")
+    p.add_argument("--executions", metavar="EXEC.json",
+                   help="companion mordor executions-mode JSON; enables deriving "
+                        "cross-thread release handshake edges from its rf relation")
     args = p.parse_args(argv)
 
     try:
@@ -518,8 +726,25 @@ def main(argv=None):
     else:
         theory_name = "Prog_%s_generated" % sanitize(doc.get("program", "prog"))
 
+    derived = None
+    if args.executions:
+        try:
+            with open(args.executions) as f:
+                exec_doc = json.load(f)
+        except (OSError, ValueError) as exc:
+            sys.stderr.write("error: cannot read executions JSON %r: %s\n"
+                             % (args.executions, exc))
+            return 2
+        derived, warns = derive_handshake_edges(doc, exec_doc)
+        for w in warns:
+            sys.stderr.write("warning (handshake): %s\n" % w)
+        sys.stderr.write(
+            "derived %d release-handshake edge(s) from %s: %s\n"
+            % (len(derived), args.executions,
+               ", ".join("%s->%s" % e for e in sorted(derived)) or "(none)"))
+
     try:
-        text = render_theory(doc, theory_name)
+        text = render_theory(doc, theory_name, derived_edges=derived)
     except (ValueError, KeyError) as exc:
         sys.stderr.write("error: failed to render %r: %s\n"
                          % (args.input, exc))
