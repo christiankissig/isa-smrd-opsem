@@ -2,17 +2,10 @@
 
 `Ownership` as a concrete **implementation/instantiation of `OwickiGries`**: the ownership
 predicate, the transfer discipline (locality / footprint / fresh acquisition), the exclusivity
-invariant, interference-freedom via ownership disjointness, and a use-after-free-safety
-corollary (`uaf_safe`).
+invariant, and interference-freedom via ownership disjointness.
 
-Packaged with `OwickiGries` as the **first AFP submission**, over the abstract transition
-system — independent of the Episodic stack. Imports its sibling via the session-qualified name
-`imports "OwickiGries.OwickiGries"`. See `docs/W1_owicki_gries_design.md`, REWORK_PLAN.md → §3,
-Phase 5.
-
-**Status:** proofs complete, **zero `sorry`**, builds without `quick_and_dirty`. AFP-shaped:
-`ROOT` (`chapter AFP`, `session Ownership = OwickiGries + ...`, `document_files "root.tex"`) +
-`document/root.tex` (abstract). A `metadata` stub records the AFP TOML fields.
+The paper's use-after-free-safety corollary (`uaf_safe`) is a separate session,
+`Ownership_UAF`, so this entry carries no client-specific content.
 
 ## Build
 
