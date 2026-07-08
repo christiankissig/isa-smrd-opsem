@@ -32,11 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Cache Isabelle distribution
         id: cache-dist
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.ISABELLE_VERSION }}
           key: dist-${{ env.ISABELLE_VERSION }}-${{ runner.os }}
@@ -76,7 +76,7 @@ jobs:
         run: isabelle version
 
       - name: Cache Isabelle heaps (HOL, HOL-Library, sessions)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.isabelle
           # ROOT/source hash for freshness; restore-keys reuses the prior heaps
