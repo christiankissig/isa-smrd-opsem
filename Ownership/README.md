@@ -11,10 +11,15 @@ The paper's use-after-free-safety corollary (`uaf_safe`) is a separate session,
 
 ```bash
 isabelle build -d OwickiGries -d Ownership Ownership                 # check only
-isabelle build -o document=pdf -d OwickiGries -d Ownership Ownership # + PDF document
+isabelle build -o document=pdf -o document_output=output -c -d OwickiGries -d Ownership Ownership # + PDF document
 ```
 
 (Register each dependency dir with `-d`, non-recursively.)
+
+`document_output` tells Isabelle where to copy the built PDF (default: nowhere — it
+stays embedded in the session's build database); `-c` forces a clean rebuild, since
+`isabelle build` otherwise skips sessions it considers already up to date and won't
+regenerate the document. The PDF lands at `Ownership/output/document.pdf`.
 
 ## AFP packaging
 

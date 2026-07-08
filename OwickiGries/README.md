@@ -19,8 +19,13 @@ REWORK_PLAN.md → §3 (priority 1), Phase 5.
 
 ```bash
 isabelle build -d OwickiGries OwickiGries                 # check only
-isabelle build -o document=pdf -d OwickiGries OwickiGries # + PDF document
+isabelle build -o document=pdf -o document_output=output -c -d OwickiGries OwickiGries # + PDF document
 ```
+
+`document_output` tells Isabelle where to copy the built PDF (default: nowhere — it
+stays embedded in the session's build database); `-c` forces a clean rebuild, since
+`isabelle build` otherwise skips sessions it considers already up to date and won't
+regenerate the document. The PDF lands at `OwickiGries/output/document.pdf`.
 
 ## AFP packaging
 
