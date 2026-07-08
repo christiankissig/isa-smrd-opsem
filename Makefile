@@ -24,16 +24,16 @@ ISABELLE ?= isabelle
 
 # All reworked-layer session directories (registered for every build; the target
 # session selects what is actually built, with dependencies built automatically).
-DIRS := -d Core -d MemSem -d EventStruct -d OpSem -d OwickiGries -d Ownership -d clients/UAF_Bug -d clients/RCU
+DIRS := -d Core -d MemSem -d EventStruct -d OpSem -d OwickiGries -d Ownership -d Ownership_UAF -d clients/UAF_Bug -d clients/RCU
 
 # The full reworked stack, leaves last (dependencies build automatically).
-SESSIONS := Core MemSem EventStruct OpSem OwickiGries Ownership UAF_Bug RCU_Client
+SESSIONS := Core MemSem EventStruct OpSem OwickiGries Ownership Ownership_UAF UAF_Bug RCU_Client
 
 # The mature, genuinely zero-sorry layers (the strict non-q&d gate). The Episodic
 # spine (EventStruct/OpSem/UAF_Bug/RCU_Client) is excluded here because it sits on
 # OpSem, which still carries two documented open sorries; it is compile-checked
 # separately under quick_and_dirty. (RCU_Client itself adds no sorry.)
-CLEAN_SESSIONS := Core MemSem OwickiGries Ownership
+CLEAN_SESSIONS := Core MemSem OwickiGries Ownership Ownership_UAF
 SPINE_SESSIONS := EventStruct OpSem UAF_Bug RCU_Client
 
 .DEFAULT_GOAL := help
@@ -52,6 +52,7 @@ help:
 	@echo "  make rcu-client  RCU_Client   -- reworked RCU client, data-as-program (needs OpSem; q&d via spine)"
 	@echo "  make og          OwickiGries -- generic Owicki-Gries framework"
 	@echo "  make ownership   Ownership  -- ownership instantiation (needs OwickiGries); alias: track-a"
+	@echo "  make ownership-uaf Ownership_UAF -- UAF corollary of Ownership, kept out of the AFP entry"
 	@echo "  make spine       EventStruct+OpSem+UAF_Bug WITH quick_and_dirty (WIP route; compiles through sorries)"
 	@echo "  make ci          what CI runs: strict non-q&d gate on the mature layers + q&d compile-check of the spine"
 	@echo "  make gate        from-CLEAN non-q&d rebuild of the WHOLE stack -- the (aspirational) zero-sorry AFP gate"
@@ -95,6 +96,9 @@ og:
 # Ownership pulls in OwickiGries; `track-a` is kept as an alias.
 ownership track-a:
 	$(ISABELLE) build $(DIRS) Ownership
+
+ownership-uaf:
+	$(ISABELLE) build $(DIRS) Ownership_UAF
 
 # WIP route: compile the Episodic spine through its two open sorries (quick_and_dirty),
 # so downstream work has heaps. Drop this once the sorries are discharged (then it is

@@ -4,9 +4,9 @@ session Ownership = OwickiGries +
   description \<open>
     Ownership as a concrete implementation of the generic Owicki-Gries
     framework: an ownership predicate over an abstract transition system, the
-    transfer discipline, "ownership discharges interference-freedom", and a
-    use-after-free safety corollary (Track A, first AFP target). Depends only on
-    the sibling OwickiGries session. See docs/W1_owicki_gries_design.md.
+    transfer discipline, and "ownership discharges interference-freedom"
+    (Track A, first AFP target). Depends only on the sibling OwickiGries
+    session. See docs/W1_owicki_gries_design.md.
   \<close>
   options [timeout = 1200]
   theories

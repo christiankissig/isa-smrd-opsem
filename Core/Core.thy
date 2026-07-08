@@ -1,5 +1,5 @@
 (*  Title:      Core/Core.thy
-    Author:     RCU-C11-OpSem project (Episodic stack, layer 1: Core)
+    Author:     Christian Kissig
 
     Shared vocabulary for the Episodic-Loops operational semantics: program
     labels (the paper's (pc, loopfun, iter)), memory orders, expressions, the

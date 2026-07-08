@@ -1,5 +1,5 @@
 (*  Title:      Ownership/Ownership.thy
-    Author:     RCU-C11-OpSem project (Track A, first AFP target)
+    Author:     Christian Kissig
 
     Ownership as a concrete IMPLEMENTATION of the generic Owicki-Gries
     framework (OwickiGries.thy).  An ownership predicate over an abstract
@@ -7,19 +7,6 @@
     "ownership discharges interference-freedom" lemma, and a use-after-free
     safety corollary reproducing the paper's reasoning
     (rcu-c11-paper/example-uaf-bug-opsem.tex).
-
-    Its ONLY dependency is the sibling OwickiGries entry (no Core/MemSem/
-    EventStruct/OpSem/c11_opsem/SEFM).  Together they form the first AFP
-    submission.  See docs/W1_owicki_gries_design.md, REWORK_PLAN.md (Decision 7,
-    Phase 5, Risk 6).
-
-    Status (2026-06-09): all proofs discharged; builds with no incomplete
-    proofs and without quick_and_dirty.  Two skeleton fixes were needed during the proof
-    phase: (1) owned_outline's type missed its postcondition argument
-    ('s set); (2) ownership_interference_free conflated the OG thread index
-    (nat) with the ownership process tag ('p) -- it now takes an explicit
-    injective index-to-process map `proc` and the well-tagging discipline (the
-    RCU client supplies these).
 *)
 
 theory Ownership
@@ -169,43 +156,6 @@ proof (intro allI impI ballI)
   thus "if_pair r pa" using qj pa_eq by (auto simp: if_pair_def own_stable_def)
 qed
 
-
-section \<open>Use-after-free safety (the paper's corollary)\<close>
-
-text \<open>The paper's Hoare rules instantiate as follows (informally; the concrete
-  RCU program is supplied by the client in Phase 6):
-
-  \<^item> rcu-exit  @{text "{} t2: rcu[t2]:=\<^sup>rel 0 {t2 \<notin> own(s)}"} :
-                @{text "s \<in> releases a"}, post @{term "NotOwns t2 s"};
-  \<^item> free      @{text "{t1 \<in> own(s)} t1: free(s) {t1 \<notin> own(s)}"} :
-                @{text "s \<in> releases a"}, with precondition @{term "NotOwns t2 s"}
-                for the safe-to-free side condition;
-  \<^item> deref     @{text "{t2 \<in> own(s)} t2: v:=*s {}"} :
-                precondition @{term "Owns t2 s"}.
-
-  The UAF would co-enable @{text "free(s)"} (so @{term "NotOwns t2 s"}) with a
-  still-pending @{text "deref(s)"} (so @{term "Owns t2 s"}); by @{thm og_safety}
-  both threads' current preconditions hold at every reachable configuration, so
-  the racy configuration is contradictory -- the logic is stuck before
-  witnessing the UAF.\<close>
-
-theorem uaf_safe:
-  fixes Ts :: "(('p \<times> 'act, 's) ann \<times> 's set) list"
-  assumes og:    "og_parallel Ts"
-      and start: "s0 \<in> og_pre Ts"
-      and run:   "ann_par_steps (map fst Ts, s0) (acs, s')"
-      and i1:    "i1 < length acs" and i2: "i2 < length acs" and "i1 \<noteq> i2"
-      \<comment> \<open>thread @{text i1} is about to @{text "free(s)"}; thread @{text i2} is
-         about to @{text "deref(s)"}, hence still owns @{text s}:\<close>
-      and free_pre:  "pre (acs ! i1) \<subseteq> NotOwns t2 s"
-      and deref_pre: "pre (acs ! i2) \<subseteq> Owns t2 s"
-  shows "False"
-proof -
-  from og_safety[OF og start run] i1 i2
-  have "s' \<in> pre (acs ! i1)" and "s' \<in> pre (acs ! i2)" by blast+
-  with free_pre deref_pre have "s' \<in> NotOwns t2 s" and "s' \<in> Owns t2 s" by auto
-  thus False by (simp add: NotOwns_compl)
-qed
 
 end  \<comment> \<open>@{locale ownership_system}\<close>
 

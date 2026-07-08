@@ -1,5 +1,5 @@
 (*  Title:      OpSem/OpSem.thy
-    Author:     RCU-C11-OpSem project (Episodic stack, layer 4: OpSem-min)
+    Author:     Christian Kissig
 
     OpSem (REWORK_PLAN Phase 3a + 3b / workstreams W8a and W8b): the Episodic
     operational semantics.  This file provides

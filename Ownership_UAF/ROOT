@@ -1,0 +1,11 @@
+chapter AFP
+
+session Ownership_UAF = Ownership +
+  description \<open>
+    The paper's use-after-free safety corollary of the Ownership library, kept
+    as a separate session so the `Ownership` AFP entry itself carries no
+    client-specific content.
+  \<close>
+  options [timeout = 1200]
+  theories
+    UAF

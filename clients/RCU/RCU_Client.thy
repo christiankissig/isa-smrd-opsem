@@ -1,50 +1,39 @@
 (*  Title:      clients/RCU/RCU_Client.thy
-    Author:     RCU-C11-OpSem project (Episodic stack, client: RCU -- W10 refactor)
+    Author:     Christian Kissig
 
-    The RCU client in the SPINE style (data-as-program over the REAL Core types),
-    the W10 refactor of the retired per-PC `case` development (RCU_prog.thy /
-    RCU_state.thy and the 114-future enumeration -- all RETIRED in W4).
+    The RCU client in the SPINE style: data-as-program over the REAL Core types.
 
-    What this refactor LANDS (the W10 goals that are in scope for the loop-free
-    OpSem step relation):
+    The program is DATA, a labelled `command` list -- there is no `pc` enum; control
+    flow is the rolled `IfElse` / `While` of `Core.command`.
 
-      * S7 is DROPPED.  The legacy `pc` enum hard-coded `finished | I1..I14 |
-        R1..R5 | S1..S7`; the spine has NO pc enum -- the program is DATA, a
-        labelled `command` list -- so S7 (and every other per-PC label) simply does
-        not exist as a constructor.  Control flow is the rolled `IfElse` / `While`
-        of Core.command.
+    An abstract `command` datatype with operands + memory orders gets ONE generic
+    effect rule per command: exactly `Core.command` + `OpSem.cmd_effect` + the
+    single `step.Step` rule.  There is no per-PC `case`; every straight-line
+    instruction fires through the same rule.  We re-export the generic effect of
+    each command shape RCU uses, against the concrete RCU program, as the
+    `rcu_effect_*` lemmas below.
 
-      * An abstract `command` datatype with operands + memory orders, and ONE
-        generic effect rule per command: this is exactly `Core.command` +
-        `OpSem.cmd_effect` + the single `step.Step` rule.  There is no per-PC
-        `case`; every straight-line instruction fires through the same rule.  We
-        re-export the generic effect of each command shape RCU uses, against the
-        concrete RCU program, as the `rcu_effect_*` lemmas below.
+    `prog_RCU` is the RCU program expressed as DATA -- a labelled list of `command`
+    instances over the REAL Core types (operand-generic: the object pointer, the
+    rcu flags and the registers are ordinary `var` / `reg` operands).  Mirrors
+    `clients/UAF_Bug/UAF_Bug.thy`.
 
-      * `prog_RCU` is the RCU program expressed as DATA -- a labelled list of
-        `command` instances over the REAL Core types (operand-generic: the object
-        pointer, the rcu flags and the registers are ordinary `var` / `reg`
-        operands, NOT baked-in `C` / `var_s` / `var_n` constructors as in the old
-        RCU_atomics / RCU_prog).  Mirrors `clients/UAF_Bug/UAF_Bug.thy`.
+    Structural source of truth: the mordor-rendered digests `RCU_prog_digest.thy`
+    (rcu3) and `RCU_inc_loop_digest.thy` (rcuincloop).  Those carry provisional
+    placeholder types and string labels; here everything is in the REAL Core /
+    OpSem types, session-qualified, with `iloc` labels.
 
-    Structural source of truth: the mordor-rendered digests
-    `RCU_prog_digest.thy` (rcu3) and `RCU_inc_loop_digest.thy` (rcuincloop) -- the
-    surviving generated artefacts.  Those carry PROVISIONAL placeholder types and
-    string labels; here everything is in the REAL Core / OpSem types,
-    session-qualified, with `iloc` labels.
-
-    HONESTY / SCOPE.  The full RCU program contains LOOPS (the inc() retry loop and
-    the sync() poll loops -- `While` / `Do` in the digests).  The OpSem step
-    relation imported here is the NON-LOOP fragment (milestone 3a): `cmd_effect`
-    returns `None` for `While`, and there is no `lb`-reset / episodicity rule (that
-    is milestone 3b / W8b, RCU-only, still open).  So:
+    SCOPE.  The full RCU program contains LOOPS (the inc() retry loop and the
+    sync() poll loops -- `While` / `Do` in the digests).  The OpSem step relation
+    imported here is the NON-LOOP fragment: `cmd_effect` returns `None` for
+    `While`, and there is no `lb`-reset / episodicity rule.  So:
 
       * `prog_RCU` faithfully includes the rolled `While` body, but the loop CANNOT
         be stepped by this OpSem -- only the straight-line init preamble and the
         straight-line body commands are steppable here.
       * NO end-to-end RCU safety theorem (no-use-after-free) is claimed in this
-        file.  That needs the loop rule (W8b) and the RCU `Phi`; both are out of
-        scope for this loop-free layer.  What is established here is the data model,
+        file.  That needs the loop rule and the RCU `Phi`; both are out of scope
+        for this loop-free layer.  What is established here is the data model,
         its structural well-formedness, the generic per-command effect, and a
         concrete steppable reachability chain over the loop-free preamble -- the
         scaffolding the eventual safety proof will sit on.

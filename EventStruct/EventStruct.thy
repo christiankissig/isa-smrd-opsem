@@ -1,5 +1,5 @@
 (*  Title:      EventStruct/EventStruct.thy
-    Author:     RCU-C11-OpSem project (Episodic stack, layer 3: EventStruct)
+    Author:     Christian Kissig
 
     The SMRD event-structure semantics: events, preserved program order `ppo`,
     semantic dependency `DP`, executions, the future set `Phi` (a set of edge-sets

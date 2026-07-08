@@ -1,14 +1,12 @@
 (*  Title:      clients/UAF_Bug/UAF_Bug.thy
-    Author:     RCU-C11-OpSem project (Episodic stack, client: UAF -- W9 / Phase 4)
+    Author:     Christian Kissig
 
     The paper's minimal 2-thread use-after-free example, instantiated against the
     Episodic OpSem stack.  Reproduces the headline result `tab-fut-step-bug` /
     `-fix`: the UAF is REACHABLE in the buggy program and EXCLUDED in the fixed one.
 
-    Structural source of truth: the mordor-rendered digest + Phi in
-    `workspace/spikes/uaf-bridge/generated/Prog_uaf_bug{,_fixed}_generated.thy`
-    (PROVISIONAL placeholder types).  Here everything is in the REAL Core /
-    EventStruct / MemSem / OpSem types, session-qualified.
+    Structural source of truth: the mordor-rendered digest + Phi.  Here everything
+    is in the REAL Core / EventStruct / MemSem / OpSem types, session-qualified.
 
     The two source programs (mordor `.lit`):
 
@@ -442,6 +440,7 @@ text \<open>Now the explicit five-step chain.  Each step is the @{term Step} rul
 
 lemma reachable_uaf_chain:
   "\<exists>\<sigma> \<rho> H. opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H) \<and>
+            (step prog_uaf_bug Phi_uaf ^^ 5) init_config (\<sigma>, \<rho>, H) \<and>
             hist_labels H = {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2),
                              ev0 (t1_il 2), ev0 (t0_il 1)}"
 proof -
@@ -578,8 +577,18 @@ proof -
   qed
   have r5: "R (\<sigma>5, \<rho>5, H5)"
     unfolding R_def using r4[unfolded R_def] s5 by (rule opsem_client.reachable_step)
+  \<comment> \<open>The SAME chain, counted: exactly five @{term step} applications reach the UAF
+      config, as a machine-checked relation-power fact @{text "step ^^ 5"}.\<close>
+  have p0: "(step prog_uaf_bug Phi_uaf ^^ 0) init_config init_config" by simp
+  have p5suc: "(step prog_uaf_bug Phi_uaf ^^ Suc (Suc (Suc (Suc (Suc 0)))))
+                 init_config (\<sigma>5, \<rho>5, H5)"
+    by (rule relpowp_Suc_I[OF relpowp_Suc_I[OF relpowp_Suc_I[OF relpowp_Suc_I[OF
+            relpowp_Suc_I[OF p0 s1] s2] s3] s4] s5])
+  have five: "(5::nat) = Suc (Suc (Suc (Suc (Suc 0))))" by simp
+  have p5: "(step prog_uaf_bug Phi_uaf ^^ 5) init_config (\<sigma>5, \<rho>5, H5)"
+    unfolding five by (rule p5suc)
   show ?thesis
-    using r5[unfolded R_def] h5 by blast
+    using r5[unfolded R_def] p5 h5 by blast
 qed
 
 text \<open>The horizon facts depend only on a history's LABEL set, so the chain's final
@@ -625,6 +634,34 @@ proof -
     using free_enabled_of_labels[OF eq] deref_pending_of_labels[OF eq] by simp
   with reach show ?thesis by blast
 qed
+
+text \<open>The DERIVATION-LENGTH refinement of @{thm uaf_reachable_bug}: the UAF config
+  is reached in EXACTLY FIVE applications of the operational-semantics @{term step}
+  relation (each an instance of the single @{text Step} rule), out of the
+  eight-instruction program @{term prog_uaf_bug}.  The count @{text 5} is
+  kernel-checked here via the relation power @{text "step ^^ 5"} -- a concrete,
+  machine-verified complexity figure for the paper's headline example.\<close>
+theorem uaf_reached_in_5_steps:
+  "\<exists>cfg. (step prog_uaf_bug Phi_uaf ^^ 5) init_config cfg \<and>
+         uaf_config Phi_uaf bug_free_il bug_deref_il cfg"
+proof -
+  from reachable_uaf_chain obtain \<sigma> \<rho> H where
+    pw: "(step prog_uaf_bug Phi_uaf ^^ 5) init_config (\<sigma>, \<rho>, H)"
+    and hl: "hist_labels H = {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2),
+                              ev0 (t1_il 2), ev0 (t0_il 1)}"
+    by blast
+  have eq: "hist_labels H = hist_labels uaf_witness_H"
+    by (simp add: hl hist_labels_uaf_witness) blast
+  have "uaf_config Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
+    unfolding uaf_config_def
+    using free_enabled_of_labels[OF eq] deref_pending_of_labels[OF eq] by simp
+  with pw show ?thesis by blast
+qed
+
+text \<open>The program has eight instructions, so the derivation is strictly shorter than
+  the program is long -- a linear (indeed sub-length) bound for this example.\<close>
+lemma prog_uaf_bug_length: "length prog_uaf_bug = 8"
+  by (simp add: prog_uaf_bug_def)
 
 
 section \<open>The fix: the UAF is excluded\<close>

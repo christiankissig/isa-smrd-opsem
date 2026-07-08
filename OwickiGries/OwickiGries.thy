@@ -1,22 +1,10 @@
 (*  Title:      OwickiGries/OwickiGries.thy
-    Author:     RCU-C11-OpSem project (Track A, first AFP target)
+    Author:     Christian Kissig
 
     A generic Owicki-Gries / rely-guarantee program logic over an ABSTRACT
     transition system.  Depends only on HOL (imports Main); it is decoupled
     from the Episodic OpSem and the rest of the project, so that it (together
     with the sibling Ownership entry) can be submitted to the AFP on its own.
-
-    See docs/W1_owicki_gries_design.md and REWORK_PLAN.md (Decision 7, Phase 5,
-    Risk 6).
-
-    NOTE (2026-06-09, proof phase): the original skeleton erased postconditions
-    to `ASkip UNIV` in the `ABasic`/`AWhileF` step rules, which made the safety
-    invariant non-inductive (the post of a fired action / a while-exit was lost,
-    so the successor assertion could not be re-established, and the while-exit
-    assertion was never interference-checked).  Fixed by carrying the post:
-    `ABasic` now stores its postcondition and steps to `ASkip post`, and
-    `AWhileF` steps to `ASkip (b-exit)` with that assertion recorded in
-    `assertions`.  See docs/W1_owicki_gries_design.md \<section>4.3.
 *)
 
 theory OwickiGries

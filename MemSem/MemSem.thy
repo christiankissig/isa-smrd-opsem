@@ -1,21 +1,19 @@
 (*  Title:      MemSem/MemSem.thy
-    Author:     RCU-C11-OpSem project (Episodic stack, layer 2: MemSem)
+    Author:     Christian Kissig
 
     The thin SMRD memory semantics: the paper's program state
     sigma = (viswrite, memory, phi, RF) and the per-action effect sigma ~>_t sigma'.
 
-    Per docs/SPIKE_C_smrd_memsem.md (and REWORK_PLAN sec 2): this is a REPLACEMENT
-    for the surrey RC11 model, not a relaxation.  MemSem carries NO coherence
-    machinery -- no timestamps, modification order, per-thread views, visible-writes
-    -by-timestamp, release/acquire view-merge, or `covered`.  ALL ordering (incl.
-    release/acquire synchronisation) is delegated to Phi (ppo u DP) in the
-    EventStruct/OpSem layers.  Memory orders survive ON actions (inputs to Phi) but
-    have no view-merge effect here.  This makes the memory layer memory-model
-    agnostic: SMRD-vs-RC11 is a property of Phi alone (Spike C, Q5).
+    Per docs/SPIKE_C_smrd_memsem.md: MemSem carries NO coherence machinery -- no
+    timestamps, modification order, per-thread views, visible-writes-by-timestamp,
+    release/acquire view-merge, or `covered`.  ALL ordering (incl. release/acquire
+    synchronisation) is delegated to Phi (ppo u DP) in the EventStruct/OpSem
+    layers.  Memory orders survive ON actions (inputs to Phi) but have no
+    view-merge effect here.  This makes the memory layer memory-model agnostic:
+    SMRD-vs-RC11 is a property of Phi alone (Spike C, Q5).
 
-    Depends only on Core.  PSem's allocation discipline is folded in as `memory` +
-    phi-disjointness; OpSem_definite is retired (both legacy files in this dir are
-    superseded and not imported here).
+    Depends only on Core.  Allocation discipline is folded in as `memory` +
+    phi-disjointness.
 
     Representation choices (documented deviations, both pragmatic & noted):
     - phi is modelled SHALLOWLY as the set of admissible symbolic valuations
