@@ -48,7 +48,24 @@ jobs:
           #   https://isabelle.in.tum.de/dist/${ISABELLE_VERSION}_linux.tar.gz
           url="https://isabelle.in.tum.de/website-${ISABELLE_VERSION}/dist/${ISABELLE_VERSION}_linux.tar.gz"
           echo "Downloading $url"
-          curl -fsSL "$url" -o isabelle.tar.gz
+          # The tarball is ~1 GB and isabelle.in.tum.de resets connections
+          # mid-transfer; retry with resume (-C -) so a dropped connection
+          # continues from where it left off instead of failing the build.
+          for attempt in 1 2 3 4 5; do
+            echo "::group::download attempt $attempt"
+            if curl -fL --connect-timeout 30 --retry 5 --retry-delay 10 \
+                    --retry-all-errors -C - "$url" -o isabelle.tar.gz; then
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Isabelle download failed after 5 attempts"
+              exit 1
+            fi
+            echo "Download interrupted; retrying in 15s..."
+            sleep 15
+          done
           tar xzf isabelle.tar.gz
           rm isabelle.tar.gz
 
