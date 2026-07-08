@@ -322,7 +322,20 @@ subsection \<open>Client locale\<close>
 
 text \<open>A client (UAF, RCU, \<dots>) instantiates the program text @{term prg} and its
   future set @{term Phi}; everything operational is then derived.  @{term reachable}
-  is reachability from the canonical @{term init_config}.\<close>
+  is reachability from the canonical @{term init_config}.
+
+  Locale inputs: OWN -- @{term prg}, @{term Phi} (fixed DATA, not relations;
+  no assumption is placed on either here -- well-formedness, if wanted, is a
+  client-side proof obligation, not a locale axiom). INHERITED -- none: this
+  locale has no parent; it lives in this session alone and does NOT extend
+  the sibling @{text OwickiGries} entry's @{text transition_system} (nor
+  @{text Ownership}'s @{text ownership_system}), so a client wanting the
+  Owicki-Gries / ownership machinery over @{term step} would have to bridge
+  the two itself (the deferred "Phase 6" interpretation, see
+  @{text "docs/W1_owicki_gries_design.md"} \<section>6) -- an
+  @{text interpretation} or @{text sublocale} linking this locale's @{term
+  step} to @{text transition_system}'s @{text astep} is not done anywhere in
+  this codebase yet.\<close>
 
 locale opsem_client =
   fixes prg :: program

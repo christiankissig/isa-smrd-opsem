@@ -21,7 +21,16 @@ text \<open>Atomic actions are tagged with the acting process @{typ 'p}; resourc
   The transfer semantics (the three assumptions below) encodes the paper:
   threads instantly assume ownership of freshly allocated resources, gain
   ownership after reading the shared structure, and relinquish it at the
-  rcu-exit / @{text free}.\<close>
+  rcu-exit / @{text free}.
+
+  Locale inputs: INHERITED -- @{term astep} from @{locale transition_system}
+  (re-typed here to the tagged @{typ "('p \<times> 'act)"} action alphabet, but
+  otherwise carried over exactly as unconstrained as it was there: still no
+  totality/determinism/always-enabled assumption). OWN -- @{term owns},
+  @{term acquires}, @{term releases}, newly fixed by this locale and
+  constrained by the three @{text "assumes"} below (@{text locality}, @{text
+  footprint}, @{text fresh_acq}); these are the only axioms this locale adds
+  on top of its parent.\<close>
 
 locale ownership_system =
   transition_system astep
@@ -153,6 +162,31 @@ proof (intro allI impI ballI)
   from own[OF j] r have "own_stable (proc j) r" by (auto simp: owned_outline_def)
   thus "if_pair r pa" using qj pa_eq by (auto simp: if_pair_def own_stable_def)
 qed
+
+
+section \<open>@{term astep} is an input to this locale, not fixed by it\<close>
+
+text \<open>Worth spelling out, since it is easy to misread the three axioms above
+  as characterising a specific stepping relation: they do not. This locale
+  extends @{locale transition_system}, whose sole parameter @{term astep}
+  carries no assumption of its own (not total, not deterministic, not
+  always-enabled). @{thm [source] locality}, @{thm [source] footprint} and
+  @{thm [source] fresh_acq} each invoke @{term astep} exactly once, as a
+  premise, and constrain only how @{term owns} may change across it -- none
+  of them, nor @{thm [source] exclusive_step}, @{thm [source]
+  foreign_preserves_Owns} or @{thm [source] foreign_preserves_NotOwns},
+  inspects what @{term astep} otherwise does.
+
+  Consequently @{term astep} is a genuine INPUT to every theorem exported
+  from this locale (e.g.\ @{text "Ownership_UAF.uaf_safe"}): those theorems are
+  universally quantified over it, to be supplied later by whichever client
+  interprets the locale (the Episodic @{text OpSem} step relation, for the
+  RCU client -- deferred "Phase 6" work, see @{text
+  "docs/W1_owicki_gries_design.md"} \<section>6). The only place @{term
+  astep} is actually consulted downstream of this locale is @{term
+  ann_step}'s @{text ABasic} rule; @{term ann_par_step} / @{term
+  ann_par_steps}, and anything built on @{thm [source] og_safety}, thread it
+  through purely via that one rule.\<close>
 
 
 end  \<comment> \<open>@{locale ownership_system}\<close>

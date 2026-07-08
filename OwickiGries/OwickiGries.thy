@@ -37,7 +37,12 @@ section \<open>The abstract transition-system locale\<close>
 text \<open>The single fixed parameter is the atomic-step relation.  It is an
   arbitrary binary relation: NOT assumed total, deterministic, or always
   enabled.  This is what lets a (non-deterministic, horizon-guarded,
-  history-dependent) Episodic OpSem step interpret it later (Risk 6).\<close>
+  history-dependent) Episodic OpSem step interpret it later (Risk 6).
+
+  Locale inputs: OWN -- @{term astep} (unconstrained, no assumptions at all).
+  INHERITED -- none: this is the root of the locale hierarchy used in this
+  entry and its sibling @{text Ownership} (@{text ownership_system} below
+  extends it); it has no parent locale of its own.\<close>
 
 locale transition_system =
   fixes astep :: "'act \<Rightarrow> 's \<Rightarrow> 's \<Rightarrow> bool"
@@ -230,6 +235,19 @@ where
 abbreviation ann_par_steps ::
   "(('act,'s) ann list \<times> 's) \<Rightarrow> (('act,'s) ann list \<times> 's) \<Rightarrow> bool"
   where "ann_par_steps \<equiv> ann_par_step\<^sup>*\<^sup>*"
+
+text \<open>The shape of @{text acs}, the first component of a configuration above:
+  a list of annotated outlines, ONE PER THREAD, of type @{typ "('act,'s) ann
+  list"}. Position in the list IS thread identity, matching the convention of
+  the @{text Ts} vector consumed by @{const og_parallel} / @{const
+  interference_free} above -- @{text "acs ! i"} is thread @{text i}'s CURRENT
+  outline node at that configuration. @{const ann_par_step} only ever
+  rewrites the stepped thread's own slot (@{text "acs[i := c']"}), so @{text
+  "length acs"} is invariant across a run and every other thread's node is
+  left untouched by a step that is not theirs; that is precisely what lets a
+  configuration reached after other threads have moved still answer, for any
+  fixed @{text i}, "what does thread @{text i} still need to hold" via
+  @{text "pre (acs ! i)"}.\<close>
 
 
 subsection \<open>Preservation lemmas for the safety induction\<close>
