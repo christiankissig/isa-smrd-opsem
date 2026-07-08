@@ -3,10 +3,8 @@
 
     Ownership as a concrete IMPLEMENTATION of the generic Owicki-Gries
     framework (OwickiGries.thy).  An ownership predicate over an abstract
-    transition system, a transfer discipline, the exclusivity invariant, the
-    "ownership discharges interference-freedom" lemma, and a use-after-free
-    safety corollary reproducing the paper's reasoning
-    (rcu-c11-paper/example-uaf-bug-opsem.tex).
+    transition system, a transfer semantics, the exclusivity invariant, and the
+    "ownership discharges interference-freedom" lemma.
 *)
 
 theory Ownership
@@ -20,7 +18,7 @@ text \<open>Atomic actions are tagged with the acting process @{typ 'p}; resourc
   @{term owns}.  Each (untagged) action declares an ownership footprint via
   @{term acquires} / @{term releases}.
 
-  The transfer discipline (the three assumptions below) encodes the paper:
+  The transfer semantics (the three assumptions below) encodes the paper:
   threads instantly assume ownership of freshly allocated resources, gain
   ownership after reading the shared structure, and relinquish it at the
   rcu-exit / @{text free}.\<close>

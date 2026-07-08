@@ -1,7 +1,7 @@
 # Ownership (reusable ★ — **first AFP target**)
 
 `Ownership` as a concrete **implementation/instantiation of `OwickiGries`**: the ownership
-predicate, the transfer discipline (locality / footprint / fresh acquisition), the exclusivity
+predicate, the transfer semantics (locality / footprint / fresh acquisition), the exclusivity
 invariant, and interference-freedom via ownership disjointness.
 
 The paper's use-after-free-safety corollary (`uaf_safe`) is a separate session,

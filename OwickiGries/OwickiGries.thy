@@ -117,7 +117,17 @@ primrec assertions :: "('act,'s) ann \<Rightarrow> 's set set" where
 | "assertions (AWhile P b c)    = insert P (insert (P \<inter> - b) (assertions c))"
 
 text \<open>@{term atomics}: the @{text "(local-precondition, action)"} pair of every
-  basic statement.\<close>
+  basic statement -- the atomic accesses a thread's outline can perform.
+
+  This layer is deliberately silent on WHAT an action touches: @{typ 'act} is
+  fully abstract here, and there is no notion of a "resource" or of who is
+  "acting". A client instantiates that structure on top: the companion
+  @{text Ownership} entry sets @{typ 'act} to a pair @{text "'p \<times> 'act"} of an
+  acting process (@{typ 'p}, its notion of "thread") and an untagged operation,
+  then equips that operation with an @{text acquires}/@{text releases}
+  footprint over an abstract resource type @{typ 'r}. Under that
+  instantiation, @{term atomics} yields exactly the @{text "(precondition,
+  (thread, operation))"} triples the ownership discipline reasons about.\<close>
 primrec atomics :: "('act,'s) ann \<Rightarrow> ('s set \<times> 'act) set" where
   "atomics (ABasic P a Q)    = {(P, a)}"
 | "atomics (ASkip P)         = {}"
@@ -162,7 +172,17 @@ definition if_pair :: "'s set \<Rightarrow> ('s set \<times> 'act) \<Rightarrow>
   "if_pair r pa \<longleftrightarrow> (\<forall>s s'. s \<in> r \<inter> fst pa \<longrightarrow> astep (snd pa) s s' \<longrightarrow> s' \<in> r)"
 
 text \<open>Each thread's assertions (incl. its postcondition) survive every other
-  thread's atomic actions.\<close>
+  thread's atomic actions.
+
+  Note what "thread" means AT THIS LAYER: @{text Ts} is the thread vector,
+  @{text "Ts ! i"} is thread @{text i}'s @{text "(outline, postcondition)"}
+  pair, and thread identity is simply position in that list -- @{typ nat}, not
+  some richer process type. A client that carries its own thread/process tag
+  inside @{typ 'act} (as @{text Ownership}'s @{typ 'p} does) must separately
+  relate that tag back to the list index @{text i}; see
+  @{text Ownership.ownership_interference_free}'s injective @{text
+  "proc :: nat \<Rightarrow> 'p"} map and well-tagging discipline for how that bridge is
+  built without reopening this generic layer.\<close>
 
 definition interference_free ::
   "(('act,'s) ann \<times> 's set) list \<Rightarrow> bool" where

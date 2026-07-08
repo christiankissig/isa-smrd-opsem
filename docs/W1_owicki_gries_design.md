@@ -267,7 +267,7 @@ locale ownership_system =
   fixes owns      :: "'s ⇒ 'p ⇒ 'r set"     -- resources owned by a process in a state
     and acquires :: "'act ⇒ 'r set"          -- footprint: resources the action takes
     and releases :: "'act ⇒ 'r set"          -- footprint: resources the action relinquishes
-  assumes ...transfer discipline...
+  assumes ...transfer semantics...
 ```
 
 The paper's `t ∈ own(s)` is `s_state ∈ Owns t s`:

@@ -23,7 +23,7 @@
   (AFP entry \emph{OwickiGries}).  Actions are tagged with the acting process,
   resources have an abstract type, and the abstract state carries an
   \emph{ownership map} assigning a set of owned resources to each process.  A
-  three-rule transfer discipline (locality, footprint, and fresh acquisition)
+  three-rule transfer semantics (locality, footprint, and fresh acquisition)
   fixes how actions move ownership; it abstracts the rules of a read-copy-update
   (RCU) algorithm --- a thread assumes ownership of freshly allocated resources,
   gains ownership after reading the shared structure, and relinquishes it at the

@@ -15,6 +15,20 @@ REWORK_PLAN.md → §3 (priority 1), Phase 5.
 `ROOT` (`chapter AFP`, `document_files "root.tex"`) + `document/root.tex` (abstract). A
 `metadata` stub records the AFP TOML fields.
 
+## Terminology: "atomics" are threads/resources/access-agnostic
+
+This layer's `atomics` function (an outline's `(precondition, action) set`) and
+`interference_free` are deliberately generic: `'act` is fully abstract, and a
+"thread" here is nothing more than an outline's index into the `Ts` list. There
+is no built-in notion of a resource or of who acts. The companion `Ownership`
+entry is where that structure gets layered on: it instantiates `'act` as a pair
+`'p × 'act` (an acting process `'p`, i.e. its notion of "thread", tupled with an
+untagged operation) and equips the operation with an `acquires`/`releases`
+footprint over an abstract resource type `'r`. See the `atomics` and
+`interference_free` doc comments in `OwickiGries.thy` for the full bridge (incl.
+how `Ownership.ownership_interference_free` relates its process tag back to the
+list-index notion of thread used here).
+
 ## Build
 
 ```bash
