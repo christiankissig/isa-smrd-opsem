@@ -15,11 +15,15 @@
     * \<Phi>_uaf_bug : the future set, one edge-set over event-labels per execution
 
   Notes / faithfulness:
-    * RMW (Faa/Cas) is ONE instruction carrying several events (#0,#1,#2).
+    * RMW (Faa/Cas) is ONE instruction carrying several events (Faa #0,#1;
+      Cas #0,#1,#2 -- the W #2 is absent on a failing CAS).
     * Loop-iteration event-labels (e.g. t0.4@1:1#0) are rendered verbatim in \<Phi>.
-    * Edges are rendered as in the JSON; reflexive (identity) closure is left to
-      the consumer (MORDOR_ISA_FORMAT.md s1).
-    * Faa/Cas `rmw_op` (strong/weak) is present in the schema but NOT rendered here.
+    * init-scope labels are g.* ; thread-scope labels are t<tid>.* .
+    * Edges are normalised before rendering: reflexive (identity) edges are
+      DROPPED (the consumer takes reflexive closure, MORDOR_ISA_FORMAT.md s1)
+      and exact duplicates removed; first-occurrence order is preserved.
+    * Faa/Cas `rmw_op` (strong/weak) has no slot in the provisional command
+      type, so it is preserved as an inline Isabelle comment on the entry.
 *)
 
 theory Prog_UAF_generated
@@ -85,7 +89,8 @@ definition prog_uaf_bug_init :: "(label \<times> command) list" where
        ''g.1'' is Alloc ''rC'' (EInt 1),
        ''g.2'' is WritePtr rlx (EReg ''rC'') (EInt 0),
        ''g.3'' is Alloc ''rcu'' (EInt 1),
-       ''g.4'' is WritePtr rlx (EReg ''rcu'') (EInt 1)
+       ''g.4'' is WritePtr rlx (EReg ''rcu'') (EInt 1),
+       ''g.5'' is Fence acq_rel
        ]
   "
 
@@ -112,13 +117,17 @@ definition prog_uaf_bug_t1 :: "(label \<times> command) list" where
 definition prog_uaf_bug :: "(label \<times> command) list list" where
   "prog_uaf_bug = [prog_uaf_bug_init, prog_uaf_bug_t0, prog_uaf_bug_t1]"
 
-text \<open>Event \<open>\<rightarrow>\<close> instruction map (event-label, instruction-label, type).\<close>
+text \<open>Static event \<open>\<rightarrow>\<close> instruction map (event-label,
+  instruction-label, type).  These are the \emph{rolled} event-labels (no
+  \<open>@loop:iter\<close> suffix); the unrolled iter-labels appearing in \<open>\<Phi>\<close>
+  collapse onto these via the \<open>lb\<close>-rule (MORDOR_ISA_FORMAT.md s2).\<close>
 definition evmap_uaf_bug :: "(string \<times> string \<times> string) list" where
   "evmap_uaf_bug = [
   (''g.1#0'', ''g.1'', ''Alloc''),
   (''g.2#0'', ''g.2'', ''W''),
   (''g.3#0'', ''g.3'', ''Alloc''),
   (''g.4#0'', ''g.4'', ''W''),
+  (''g.5#0'', ''g.5'', ''Fence''),
   (''t0.1#0'', ''t0.1'', ''R''),
   (''t0.2#0'', ''t0.2'', ''Branch''),
   (''t0.3#0'', ''t0.3'', ''Dealloc''),
@@ -135,109 +144,89 @@ definition \<Phi>_uaf_bug_exec0 :: "(string \<times> string) set" where
   "\<Phi>_uaf_bug_exec0 =
   {
   (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''g.5#0''),
+  (''g.1#0'', ''t0.1#0''),
+  (''g.1#0'', ''t1.1#0''),
+  (''g.1#0'', ''t1.2#0''),
+  (''g.2#0'', ''g.5#0''),
+  (''g.2#0'', ''t0.1#0''),
+  (''g.2#0'', ''t1.1#0''),
+  (''g.2#0'', ''t1.2#0''),
   (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''g.5#0''),
   (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t1.1#0''),
   (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''g.5#0''),
   (''g.4#0'', ''t0.1#0''),
-  (''g.4#0'', ''t1.2#0'')
+  (''g.4#0'', ''t1.1#0''),
+  (''g.4#0'', ''t1.2#0''),
+  (''g.5#0'', ''t0.1#0''),
+  (''g.5#0'', ''t1.1#0''),
+  (''g.5#0'', ''t1.2#0'')
   }"
 
 definition \<Phi>_uaf_bug_exec1 :: "(string \<times> string) set" where
   "\<Phi>_uaf_bug_exec1 =
   {
   (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''g.5#0''),
+  (''g.1#0'', ''t0.1#0''),
+  (''g.1#0'', ''t0.3#0''),
   (''g.1#0'', ''t1.1#0''),
+  (''g.1#0'', ''t1.2#0''),
+  (''g.2#0'', ''g.5#0''),
+  (''g.2#0'', ''t0.1#0''),
+  (''g.2#0'', ''t0.3#0''),
   (''g.2#0'', ''t1.1#0''),
+  (''g.2#0'', ''t1.2#0''),
   (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''g.5#0''),
   (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t0.3#0''),
+  (''g.3#0'', ''t1.1#0''),
   (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''g.5#0''),
   (''g.4#0'', ''t0.1#0''),
-  (''g.4#0'', ''t1.2#0'')
+  (''g.4#0'', ''t0.3#0''),
+  (''g.4#0'', ''t1.1#0''),
+  (''g.4#0'', ''t1.2#0''),
+  (''g.5#0'', ''t0.1#0''),
+  (''g.5#0'', ''t0.3#0''),
+  (''g.5#0'', ''t1.1#0''),
+  (''g.5#0'', ''t1.2#0''),
+  (''t0.1#0'', ''t0.3#0'')
   }"
 
 definition \<Phi>_uaf_bug_exec2 :: "(string \<times> string) set" where
   "\<Phi>_uaf_bug_exec2 =
   {
   (''g.1#0'', ''g.2#0''),
+  (''g.1#0'', ''g.5#0''),
+  (''g.1#0'', ''t0.1#0''),
   (''g.1#0'', ''t0.3#0''),
+  (''g.1#0'', ''t1.1#0''),
+  (''g.1#0'', ''t1.2#0''),
+  (''g.2#0'', ''g.5#0''),
+  (''g.2#0'', ''t0.1#0''),
   (''g.2#0'', ''t0.3#0''),
-  (''g.3#0'', ''t0.1#0''),
-  (''g.3#0'', ''t1.2#0''),
-  (''t0.1#0'', ''t0.3#0''),
-  (''t1.2#0'', ''t0.1#0'')
-  }"
-
-definition \<Phi>_uaf_bug_exec3 :: "(string \<times> string) set" where
-  "\<Phi>_uaf_bug_exec3 =
-  {
-  (''g.1#0'', ''g.2#0''),
-  (''g.1#0'', ''t0.3#0''),
-  (''g.2#0'', ''t0.3#0''),
+  (''g.2#0'', ''t1.1#0''),
+  (''g.2#0'', ''t1.2#0''),
   (''g.3#0'', ''g.4#0''),
+  (''g.3#0'', ''g.5#0''),
   (''g.3#0'', ''t0.1#0''),
+  (''g.3#0'', ''t0.3#0''),
+  (''g.3#0'', ''t1.1#0''),
   (''g.3#0'', ''t1.2#0''),
+  (''g.4#0'', ''g.5#0''),
   (''g.4#0'', ''t0.1#0''),
+  (''g.4#0'', ''t0.3#0''),
+  (''g.4#0'', ''t1.1#0''),
   (''g.4#0'', ''t1.2#0''),
-  (''t0.1#0'', ''t0.3#0'')
-  }"
-
-definition \<Phi>_uaf_bug_exec4 :: "(string \<times> string) set" where
-  "\<Phi>_uaf_bug_exec4 =
-  {
-  (''g.1#0'', ''g.2#0''),
-  (''g.1#0'', ''t0.3#0''),
-  (''g.1#0'', ''t1.1#0''),
-  (''g.2#0'', ''t0.3#0''),
-  (''g.2#0'', ''t1.1#0''),
-  (''g.3#0'', ''t0.1#0''),
-  (''g.3#0'', ''t1.2#0''),
-  (''t0.1#0'', ''t0.3#0''),
-  (''t1.2#0'', ''t0.1#0'')
-  }"
-
-definition \<Phi>_uaf_bug_exec5 :: "(string \<times> string) set" where
-  "\<Phi>_uaf_bug_exec5 =
-  {
-  (''g.1#0'', ''g.2#0''),
-  (''g.1#0'', ''t0.3#0''),
-  (''g.1#0'', ''t1.1#0''),
-  (''g.2#0'', ''t0.3#0''),
-  (''g.2#0'', ''t1.1#0''),
-  (''g.3#0'', ''t0.1#0''),
-  (''g.3#0'', ''t1.2#0''),
-  (''t0.1#0'', ''t0.3#0''),
-  (''t1.2#0'', ''t0.1#0'')
-  }"
-
-definition \<Phi>_uaf_bug_exec6 :: "(string \<times> string) set" where
-  "\<Phi>_uaf_bug_exec6 =
-  {
-  (''g.1#0'', ''g.2#0''),
-  (''g.1#0'', ''t0.3#0''),
-  (''g.1#0'', ''t1.1#0''),
-  (''g.2#0'', ''t0.3#0''),
-  (''g.2#0'', ''t1.1#0''),
-  (''g.3#0'', ''g.4#0''),
-  (''g.3#0'', ''t0.1#0''),
-  (''g.3#0'', ''t1.2#0''),
-  (''g.4#0'', ''t0.1#0''),
-  (''g.4#0'', ''t1.2#0''),
-  (''t0.1#0'', ''t0.3#0'')
-  }"
-
-definition \<Phi>_uaf_bug_exec7 :: "(string \<times> string) set" where
-  "\<Phi>_uaf_bug_exec7 =
-  {
-  (''g.1#0'', ''g.2#0''),
-  (''g.1#0'', ''t0.3#0''),
-  (''g.1#0'', ''t1.1#0''),
-  (''g.2#0'', ''t0.3#0''),
-  (''g.2#0'', ''t1.1#0''),
-  (''g.3#0'', ''g.4#0''),
-  (''g.3#0'', ''t0.1#0''),
-  (''g.3#0'', ''t1.2#0''),
-  (''g.4#0'', ''t0.1#0''),
-  (''g.4#0'', ''t1.2#0''),
+  (''g.5#0'', ''t0.1#0''),
+  (''g.5#0'', ''t0.3#0''),
+  (''g.5#0'', ''t1.1#0''),
+  (''g.5#0'', ''t1.2#0''),
   (''t0.1#0'', ''t0.3#0'')
   }"
 
@@ -245,11 +234,6 @@ definition \<Phi>_uaf_bug :: "(string \<times> string) set set" where
   "\<Phi>_uaf_bug =
   { \<Phi>_uaf_bug_exec0,
     \<Phi>_uaf_bug_exec1,
-    \<Phi>_uaf_bug_exec2,
-    \<Phi>_uaf_bug_exec3,
-    \<Phi>_uaf_bug_exec4,
-    \<Phi>_uaf_bug_exec5,
-    \<Phi>_uaf_bug_exec6,
-    \<Phi>_uaf_bug_exec7 }"
+    \<Phi>_uaf_bug_exec2 }"
 
 end

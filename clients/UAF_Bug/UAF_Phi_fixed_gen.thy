@@ -20,28 +20,68 @@ begin
 text \<open>The future set \<open>\<Phi>_uaf_bug_fixed\<close> over Core @{typ elabel}, one
   edge-set per execution; rendered from the mordor isa JSON.\<close>
 
+text \<open>exec 0: +1 derived release-handshake edge(s): t1.2#0 \<rightarrow> t0.1#0\<close>
 definition \<Phi>_uaf_bug_fixed_exec0 :: future where
   "\<Phi>_uaf_bug_fixed_exec0 =
   {
+  edge (il Init 1) (il Init 2),
+  edge (il Init 1) (il Init 5),
+  edge (il Init 1) (il (Thr 0) 1),
+  edge (il Init 1) (il (Thr 1) 1),
   edge (il Init 1) (il (Thr 1) 2),
-  edge (il Init 1) (il (Thr 1) 3),
-  edge (il Init 2) (il (Thr 1) 3),
-  edge (il (Thr 1) 1) (il (Thr 1) 3),
-  edge (il (Thr 1) 2) (il (Thr 1) 3)
+  edge (il Init 2) (il Init 5),
+  edge (il Init 2) (il (Thr 0) 1),
+  edge (il Init 2) (il (Thr 1) 1),
+  edge (il Init 2) (il (Thr 1) 2),
+  edge (il Init 3) (il Init 4),
+  edge (il Init 3) (il Init 5),
+  edge (il Init 3) (il (Thr 0) 1),
+  edge (il Init 3) (il (Thr 1) 1),
+  edge (il Init 3) (il (Thr 1) 2),
+  edge (il Init 4) (il Init 5),
+  edge (il Init 4) (il (Thr 0) 1),
+  edge (il Init 4) (il (Thr 1) 1),
+  edge (il Init 4) (il (Thr 1) 2),
+  edge (il Init 5) (il (Thr 0) 1),
+  edge (il Init 5) (il (Thr 1) 1),
+  edge (il Init 5) (il (Thr 1) 2),
+  edge (il (Thr 1) 1) (il (Thr 1) 2),
+  edge (il (Thr 1) 2) (il (Thr 0) 1)
   }"
 
-text \<open>exec 1: +1 derived release-handshake edge(s): t1.3#0 \<rightarrow> t0.1#0\<close>
+text \<open>exec 1: +1 derived release-handshake edge(s): t1.2#0 \<rightarrow> t0.1#0\<close>
 definition \<Phi>_uaf_bug_fixed_exec1 :: future where
   "\<Phi>_uaf_bug_fixed_exec1 =
   {
+  edge (il Init 1) (il Init 2),
+  edge (il Init 1) (il Init 5),
+  edge (il Init 1) (il (Thr 0) 1),
   edge (il Init 1) (il (Thr 0) 3),
+  edge (il Init 1) (il (Thr 1) 1),
   edge (il Init 1) (il (Thr 1) 2),
-  edge (il Init 1) (il (Thr 1) 3),
-  edge (il Init 2) (il (Thr 1) 3),
+  edge (il Init 2) (il Init 5),
+  edge (il Init 2) (il (Thr 0) 1),
+  edge (il Init 2) (il (Thr 0) 3),
+  edge (il Init 2) (il (Thr 1) 1),
+  edge (il Init 2) (il (Thr 1) 2),
+  edge (il Init 3) (il Init 4),
+  edge (il Init 3) (il Init 5),
+  edge (il Init 3) (il (Thr 0) 1),
+  edge (il Init 3) (il (Thr 0) 3),
+  edge (il Init 3) (il (Thr 1) 1),
+  edge (il Init 3) (il (Thr 1) 2),
+  edge (il Init 4) (il Init 5),
+  edge (il Init 4) (il (Thr 0) 1),
+  edge (il Init 4) (il (Thr 0) 3),
+  edge (il Init 4) (il (Thr 1) 1),
+  edge (il Init 4) (il (Thr 1) 2),
+  edge (il Init 5) (il (Thr 0) 1),
+  edge (il Init 5) (il (Thr 0) 3),
+  edge (il Init 5) (il (Thr 1) 1),
+  edge (il Init 5) (il (Thr 1) 2),
   edge (il (Thr 0) 1) (il (Thr 0) 3),
-  edge (il (Thr 1) 1) (il (Thr 1) 3),
-  edge (il (Thr 1) 2) (il (Thr 1) 3),
-  edge (il (Thr 1) 3) (il (Thr 0) 1)
+  edge (il (Thr 1) 1) (il (Thr 1) 2),
+  edge (il (Thr 1) 2) (il (Thr 0) 1)
   }"
 
 definition \<Phi>_uaf_bug_fixed :: Phi where

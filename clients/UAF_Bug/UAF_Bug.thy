@@ -8,29 +8,31 @@
     Structural source of truth: the mordor-rendered digest + Phi.  Here everything
     is in the REAL Core / EventStruct / MemSem / OpSem types, session-qualified.
 
-    The two source programs (mordor `.lit`):
+    The two source programs (mordor `.lit`) are now IDENTICAL except for the exit
+    write's memory order (relaxed in the bug, release in the fixed):
 
       uaf-bug.lit                          uaf-bug-fixed.lit
       ----------------------------------   ----------------------------------------
       g.1 alloc  rC := 1                   g.1 alloc  rC := 1
-      g.2 W_rlx *rC := 0                   g.2 alloc  rcu := 1
-      g.3 alloc  rcu := 1                  g.3 set    rcu := 0
-      g.4 W_rlx *rcu := 1
+      g.2 W_rlx *rC := 0                   g.2 W_rlx *rC := 0
+      g.3 alloc  rcu := 1                  g.3 alloc  rcu := 1
+      g.4 W_rlx *rcu := 1                  g.4 W_rlx *rcu := 1
+      g.5 fence(acq_rel)                   g.5 fence(acq_rel)
       ----------------------------------   ----------------------------------------
       t0.1 R_rlx rtemp := *rcu             t0.1 R_rlx rtemp := *rcu
       t0.2 if rtemp = 0:                   t0.2 if rtemp = 0:
       t0.3    free rC                      t0.3    free rC
       ----------------------------------   ----------------------------------------
-      t1.1 R_rlx rv := *rC   (DEREF)       t1.1 W_acq *rcu := 1
-      t1.2 W_rlx *rcu := 0   (EXIT, rlx)   t1.2 R_rlx rv := *rC   (DEREF)
-                                           t1.3 W_REL *rcu := 0   (EXIT, REL)
+      t1.1 R_rlx rv := *rC   (DEREF)       t1.1 R_rlx rv := *rC   (DEREF)
+      t1.2 W_rlx *rcu := 0   (EXIT, rlx)   t1.2 W_REL *rcu := 0   (EXIT, REL)
 
-    The ONLY semantic difference: the exit write's `mem_order` -- RELAXED in the bug,
-    RELEASE in the fixed -- which is exactly what makes the deref->exit ppo edge
-    PRESENT in `Phi_uaf_fixed` (t1.2#0 -> t1.3#0) and ABSENT in `Phi_uaf_bug`.  That
-    edge orders the deref `Read rC` before the exit, which (transitively, through the
-    rcu handshake) keeps `Dealloc rC` out of the horizon until the deref has
-    committed -- excluding the UAF.
+    The ONLY semantic difference: the exit write's `mem_order` -- RELAXED (t1.2) in the
+    bug, RELEASE in the fixed -- which is exactly what makes the deref->exit ppo edge
+    PRESENT in the fixed futures (t1.1#0 -> t1.2#0) and ABSENT in the bug's.  That edge
+    orders the deref `Read rC` (t1.1) before the exit; combined with the release/acquire
+    rcu handshake (the cross-thread edge t1.2#0 -> t0.1#0, release-exit -> reclaimer-read)
+    it keeps `Dealloc rC` out of the horizon until the deref has committed -- excluding the
+    UAF.  The init `fence(acq_rel)` (g.5) is present in both programs.
 *)
 
 theory UAF_Bug
@@ -62,11 +64,12 @@ text \<open>Faithful to the generated @{text "Prog_uaf_bug"} digest, retyped int
 
 definition prog_uaf_bug :: program where
   "prog_uaf_bug =
-   [ \<comment> \<open>init: allocate + publish rC, allocate + raise rcu\<close>
+   [ \<comment> \<open>init: allocate + publish rC, allocate + raise rcu, then an acq_rel fence\<close>
      g_il 1  is Malloc   vC (EInt 1),
      g_il 2  is WritePtr Rlx (EReg vC)   (EInt 0),
      g_il 3  is Malloc   vrcu (EInt 1),
      g_il 4  is WritePtr Rlx (EReg vrcu) (EInt 1),
+     g_il 5  is CFence   Acq_rel,
      \<comment> \<open>t0 (reclaimer): read rcu; if it is 0, free rC\<close>
      t0_il 1 is ReadPtr  Rlx rtemp (EReg vrcu),
      t0_il 2 is IfElse   (EEq (EReg rtemp) (EInt 0))
@@ -85,33 +88,37 @@ definition bug_exit_il   :: iloc where "bug_exit_il   = t1_il 2"   \<comment> \<
 
 section \<open>The fixed program @{text prog_uaf_fixed}\<close>
 
-text \<open>Faithful to the generated @{text "Prog_uaf_bug_fixed"} digest.  The reader now
-  (i) raises rcu (@{text "W_acq"}), (ii) DEREFs rC, (iii) lowers rcu with a RELEASE
-  write.  The release exit is the only change w.r.t. the bug at the action level;
-  at the @{typ Phi} level it adds the deref->exit edge @{text "t1.2#0 -> t1.3#0"}.\<close>
+text \<open>Faithful to the generated @{text "Prog_uaf_bug_fixed"} digest.  The fixed program
+  is now IDENTICAL to @{term prog_uaf_bug} except for the reader's exit write: it lowers
+  rcu with a RELEASE write (@{text "t1.2"}, @{term Rel}) rather than a relaxed one.  That
+  release is the only change w.r.t. the bug at the action level; at the @{typ Phi} level
+  it (i) adds the deref->exit ppo edge @{text "t1.1#0 -> t1.2#0"} and (ii) through the
+  release/acquire rcu handshake induces the cross-thread edge @{text "t1.2#0 -> t0.1#0"}.\<close>
 
 definition prog_uaf_fixed :: program where
   "prog_uaf_fixed =
-   [ \<comment> \<open>init: allocate rC, allocate rcu, set rcu := 0\<close>
+   [ \<comment> \<open>init: allocate + publish rC, allocate + raise rcu, then an acq_rel fence\<close>
      g_il 1  is Malloc   vC (EInt 1),
-     g_il 2  is Malloc   vrcu (EInt 1),
-     g_il 3  is WritePtr Rlx (EReg vrcu) (EInt 0),
+     g_il 2  is WritePtr Rlx (EReg vC)   (EInt 0),
+     g_il 3  is Malloc   vrcu (EInt 1),
+     g_il 4  is WritePtr Rlx (EReg vrcu) (EInt 1),
+     g_il 5  is CFence   Acq_rel,
      \<comment> \<open>t0 (reclaimer): read rcu; if it is 0, free rC\<close>
      t0_il 1 is ReadPtr  Rlx rtemp (EReg vrcu),
      t0_il 2 is IfElse   (EEq (EReg rtemp) (EInt 0))
                  [ t0_il 3 is Free vC ]
                  [],
-     \<comment> \<open>t1 (reader): raise rcu (acq), DEREF rC, RELEASE exit write of rcu\<close>
-     t1_il 1 is WritePtr Acq (EReg vrcu) (EInt 1),
-     t1_il 2 is ReadPtr  Rlx rv (EReg vC),
-     t1_il 3 is WritePtr Rel (EReg vrcu) (EInt 0)
+     \<comment> \<open>t1 (reader): DEREF rC, then RELEASE exit write of rcu\<close>
+     t1_il 1 is ReadPtr  Rlx rv (EReg vC),
+     t1_il 2 is WritePtr Rel (EReg vrcu) (EInt 0)
    ]"
 
-text \<open>The corresponding labels in the FIXED program (the deref / exit are shifted by
-  one because of the extra @{text "W_acq"} at @{text "t1.1"}).\<close>
+text \<open>The corresponding labels in the FIXED program.  The program is structurally the
+  same as the bug, so the free / deref / exit sit at the same instruction-labels; only
+  the exit's memory order differs.\<close>
 definition fix_free_il   :: iloc where "fix_free_il   = t0_il 3"   \<comment> \<open>@{text "free rC"}\<close>
-definition fix_deref_il  :: iloc where "fix_deref_il  = t1_il 2"   \<comment> \<open>@{text "R rC"} (deref)\<close>
-definition fix_exit_il   :: iloc where "fix_exit_il   = t1_il 3"   \<comment> \<open>@{text "W_REL rcu"} (exit)\<close>
+definition fix_deref_il  :: iloc where "fix_deref_il  = t1_il 1"   \<comment> \<open>@{text "R rC"} (deref)\<close>
+definition fix_exit_il   :: iloc where "fix_exit_il   = t1_il 2"   \<comment> \<open>@{text "W_REL rcu"} (exit)\<close>
 
 
 section \<open>The future sets @{text Phi_uaf} / @{text Phi_uaf_fixed} (EventStruct Phi)\<close>
@@ -123,83 +130,80 @@ text \<open>Each execution's edge-set is rendered over @{typ elabel} via @{term 
 
 subsection \<open>@{text Phi_uaf} (the bug)\<close>
 
+text \<open>The @{text \<open>fence(acq_rel)\<close>} at @{text \<open>g.5\<close>} collapses the bug's future set to two
+  distinct edge-sets: @{term Phi_uaf_exec0} (no free) and @{term Phi_uaf_exec1} (the
+  free-bearing WITNESS).  (The generated @{text "\<Phi>_uaf_bug"} lists a third
+  execution whose edge-set is identical to @{term Phi_uaf_exec1}; as a set of futures it
+  contributes nothing, so we retype the two distinct ones.)\<close>
+
 definition Phi_uaf_exec0 :: future where
   "Phi_uaf_exec0 =
-   { edge (g_il 1) (g_il 2), edge (g_il 3) (g_il 4),
-     edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (g_il 4) (t0_il 1), edge (g_il 4) (t1_il 2) }"
+   { edge (g_il 1) (g_il 2), edge (g_il 1) (g_il 5), edge (g_il 1) (t0_il 1),
+     edge (g_il 1) (t1_il 1), edge (g_il 1) (t1_il 2),
+     edge (g_il 2) (g_il 5), edge (g_il 2) (t0_il 1), edge (g_il 2) (t1_il 1),
+     edge (g_il 2) (t1_il 2),
+     edge (g_il 3) (g_il 4), edge (g_il 3) (g_il 5), edge (g_il 3) (t0_il 1),
+     edge (g_il 3) (t1_il 1), edge (g_il 3) (t1_il 2),
+     edge (g_il 4) (g_il 5), edge (g_il 4) (t0_il 1), edge (g_il 4) (t1_il 1),
+     edge (g_il 4) (t1_il 2),
+     edge (g_il 5) (t0_il 1), edge (g_il 5) (t1_il 1), edge (g_il 5) (t1_il 2) }"
 
+text \<open>exec1 is the UAF WITNESS execution: @{text "free rC"} (@{text "t0.3#0"}) has
+  predecessors @{text "{g.1#0, g.2#0, g.3#0, g.4#0, g.5#0, t0.1#0}"} only -- the DEREF
+  @{text "t1.1#0"} is NOT among them, so the free can be enabled with the deref still
+  pending.\<close>
 definition Phi_uaf_exec1 :: future where
   "Phi_uaf_exec1 =
-   { edge (g_il 1) (g_il 2), edge (g_il 1) (t1_il 1), edge (g_il 2) (t1_il 1),
-     edge (g_il 3) (g_il 4), edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (g_il 4) (t0_il 1), edge (g_il 4) (t1_il 2) }"
-
-text \<open>exec2 is the UAF WITNESS execution: @{text "free rC"} (@{text "t0.3#0"}) has
-  predecessors @{text "{g.1#0, g.2#0, t0.1#0}"} only -- the DEREF @{text "t1.1#0"} is
-  NOT among them, so the free can be enabled with the deref still pending.\<close>
-definition Phi_uaf_exec2 :: future where
-  "Phi_uaf_exec2 =
-   { edge (g_il 1) (g_il 2), edge (g_il 1) (t0_il 3), edge (g_il 2) (t0_il 3),
-     edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (t0_il 1) (t0_il 3), edge (t1_il 2) (t0_il 1) }"
-
-definition Phi_uaf_exec3 :: future where
-  "Phi_uaf_exec3 =
-   { edge (g_il 1) (g_il 2), edge (g_il 1) (t0_il 3), edge (g_il 2) (t0_il 3),
-     edge (g_il 3) (g_il 4), edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (g_il 4) (t0_il 1), edge (g_il 4) (t1_il 2), edge (t0_il 1) (t0_il 3) }"
-
-definition Phi_uaf_exec4 :: future where
-  "Phi_uaf_exec4 =
-   { edge (g_il 1) (g_il 2), edge (g_il 1) (t0_il 3), edge (g_il 1) (t1_il 1),
-     edge (g_il 2) (t0_il 3), edge (g_il 2) (t1_il 1),
-     edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (t0_il 1) (t0_il 3), edge (t1_il 2) (t0_il 1) }"
-
-definition Phi_uaf_exec5 :: future where
-  "Phi_uaf_exec5 =
-   { edge (g_il 1) (g_il 2), edge (g_il 1) (t0_il 3), edge (g_il 1) (t1_il 1),
-     edge (g_il 2) (t0_il 3), edge (g_il 2) (t1_il 1),
-     edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (t0_il 1) (t0_il 3), edge (t1_il 2) (t0_il 1) }"
-
-definition Phi_uaf_exec6 :: future where
-  "Phi_uaf_exec6 =
-   { edge (g_il 1) (g_il 2), edge (g_il 1) (t0_il 3), edge (g_il 1) (t1_il 1),
-     edge (g_il 2) (t0_il 3), edge (g_il 2) (t1_il 1),
-     edge (g_il 3) (g_il 4), edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (g_il 4) (t0_il 1), edge (g_il 4) (t1_il 2), edge (t0_il 1) (t0_il 3) }"
-
-definition Phi_uaf_exec7 :: future where
-  "Phi_uaf_exec7 =
-   { edge (g_il 1) (g_il 2), edge (g_il 1) (t0_il 3), edge (g_il 1) (t1_il 1),
-     edge (g_il 2) (t0_il 3), edge (g_il 2) (t1_il 1),
-     edge (g_il 3) (g_il 4), edge (g_il 3) (t0_il 1), edge (g_il 3) (t1_il 2),
-     edge (g_il 4) (t0_il 1), edge (g_il 4) (t1_il 2), edge (t0_il 1) (t0_il 3) }"
+   { edge (g_il 1) (g_il 2), edge (g_il 1) (g_il 5), edge (g_il 1) (t0_il 1),
+     edge (g_il 1) (t0_il 3), edge (g_il 1) (t1_il 1), edge (g_il 1) (t1_il 2),
+     edge (g_il 2) (g_il 5), edge (g_il 2) (t0_il 1), edge (g_il 2) (t0_il 3),
+     edge (g_il 2) (t1_il 1), edge (g_il 2) (t1_il 2),
+     edge (g_il 3) (g_il 4), edge (g_il 3) (g_il 5), edge (g_il 3) (t0_il 1),
+     edge (g_il 3) (t0_il 3), edge (g_il 3) (t1_il 1), edge (g_il 3) (t1_il 2),
+     edge (g_il 4) (g_il 5), edge (g_il 4) (t0_il 1), edge (g_il 4) (t0_il 3),
+     edge (g_il 4) (t1_il 1), edge (g_il 4) (t1_il 2),
+     edge (g_il 5) (t0_il 1), edge (g_il 5) (t0_il 3), edge (g_il 5) (t1_il 1),
+     edge (g_il 5) (t1_il 2),
+     edge (t0_il 1) (t0_il 3) }"
 
 definition Phi_uaf :: Phi where
-  "Phi_uaf =
-   { Phi_uaf_exec0, Phi_uaf_exec1, Phi_uaf_exec2, Phi_uaf_exec3,
-     Phi_uaf_exec4, Phi_uaf_exec5, Phi_uaf_exec6, Phi_uaf_exec7 }"
+  "Phi_uaf = { Phi_uaf_exec0, Phi_uaf_exec1 }"
 
 subsection \<open>@{text Phi_uaf_fixed} (the fix)\<close>
 
-text \<open>exec0 has no free; exec1 is the one containing @{text "free rC"}
-  (@{text "t0.3#0"}).  In BOTH, the deref->exit edge @{text "t1.2#0 -> t1.3#0"} is
-  PRESENT (the release exit's ppo predecessor) -- the discriminator absent in the
-  bug.\<close>
+text \<open>This is the PROVISIONAL, single-program mordor render (the un-enriched futures of
+  @{text "uaf-bug-fixed"}): exec0 has no free; exec1 is the one containing @{text "free
+  rC"} (@{text "t0.3#0"}).  In BOTH, the deref->exit edge @{text "t1.1#0 -> t1.2#0"} is
+  PRESENT (the release exit's ppo predecessor) -- the discriminator absent in the bug.
+  These edge-sets are the generated @{term \<Phi>_uaf_bug_fixed} MINUS the derived
+  cross-thread handshake edge @{text "t1.2#0 -> t0.1#0"}; see the HONESTY NOTE below.\<close>
 
 definition Phi_uaf_fixed_exec0 :: future where
   "Phi_uaf_fixed_exec0 =
-   { edge (g_il 1) (t1_il 2), edge (g_il 1) (t1_il 3), edge (g_il 2) (t1_il 3),
-     edge (t1_il 1) (t1_il 3), edge (t1_il 2) (t1_il 3) }"
+   { edge (g_il 1) (g_il 2), edge (g_il 1) (g_il 5), edge (g_il 1) (t0_il 1),
+     edge (g_il 1) (t1_il 1), edge (g_il 1) (t1_il 2),
+     edge (g_il 2) (g_il 5), edge (g_il 2) (t0_il 1), edge (g_il 2) (t1_il 1),
+     edge (g_il 2) (t1_il 2),
+     edge (g_il 3) (g_il 4), edge (g_il 3) (g_il 5), edge (g_il 3) (t0_il 1),
+     edge (g_il 3) (t1_il 1), edge (g_il 3) (t1_il 2),
+     edge (g_il 4) (g_il 5), edge (g_il 4) (t0_il 1), edge (g_il 4) (t1_il 1),
+     edge (g_il 4) (t1_il 2),
+     edge (g_il 5) (t0_il 1), edge (g_il 5) (t1_il 1), edge (g_il 5) (t1_il 2),
+     edge (t1_il 1) (t1_il 2) }"
 
 definition Phi_uaf_fixed_exec1 :: future where
   "Phi_uaf_fixed_exec1 =
-   { edge (g_il 1) (t0_il 3), edge (g_il 1) (t1_il 2), edge (g_il 1) (t1_il 3),
-     edge (g_il 2) (t1_il 3), edge (t0_il 1) (t0_il 3),
-     edge (t1_il 1) (t1_il 3), edge (t1_il 2) (t1_il 3) }"
+   { edge (g_il 1) (g_il 2), edge (g_il 1) (g_il 5), edge (g_il 1) (t0_il 1),
+     edge (g_il 1) (t0_il 3), edge (g_il 1) (t1_il 1), edge (g_il 1) (t1_il 2),
+     edge (g_il 2) (g_il 5), edge (g_il 2) (t0_il 1), edge (g_il 2) (t0_il 3),
+     edge (g_il 2) (t1_il 1), edge (g_il 2) (t1_il 2),
+     edge (g_il 3) (g_il 4), edge (g_il 3) (g_il 5), edge (g_il 3) (t0_il 1),
+     edge (g_il 3) (t0_il 3), edge (g_il 3) (t1_il 1), edge (g_il 3) (t1_il 2),
+     edge (g_il 4) (g_il 5), edge (g_il 4) (t0_il 1), edge (g_il 4) (t0_il 3),
+     edge (g_il 4) (t1_il 1), edge (g_il 4) (t1_il 2),
+     edge (g_il 5) (t0_il 1), edge (g_il 5) (t0_il 3), edge (g_il 5) (t1_il 1),
+     edge (g_il 5) (t1_il 2),
+     edge (t0_il 1) (t0_il 3), edge (t1_il 1) (t1_il 2) }"
 
 definition Phi_uaf_fixed :: Phi where
   "Phi_uaf_fixed = { Phi_uaf_fixed_exec0, Phi_uaf_fixed_exec1 }"
@@ -213,13 +217,13 @@ text \<open>The provisional, single-program mordor render @{term Phi_uaf_fixed} 
   creates between the reader and the reclaimer (see the HONESTY NOTE below and the
   machine-checked counter-fact @{text uaf_config_fixed_horizon_counterexample}).
   Concretely, the fixed program's reader lowers @{text rcu} with a RELEASE write at
-  @{text "t1.3"} and the reclaimer reads @{text rcu} at @{text "t0.1"}; for the
+  @{text "t1.2"} and the reclaimer reads @{text rcu} at @{text "t0.1"}; for the
   reclaimer to OBSERVE the quiescent value @{text 0} that takes its @{text "rtemp =
   0"} branch (the branch that frees @{text rC}), its read @{text "t0.1#0"} must be
-  ordered AFTER the release @{text "t1.3#0"} that produced that value.  That is the
+  ordered AFTER the release @{text "t1.2#0"} that produced that value.  That is the
   edge
 
-      @{text "t1.3#0 -> t0.1#0"}   (release-exit  ->  reclaimer-read)
+      @{text "t1.2#0 -> t0.1#0"}   (release-exit  ->  reclaimer-read)
 
   the proper cross-thread @{text "ppo \<union> DP"} carries but the single-program
   @{term futures} rendering does not emit.
@@ -227,18 +231,17 @@ text \<open>The provisional, single-program mordor render @{term Phi_uaf_fixed} 
   This edge is now DERIVED, not hand-asserted: @{term \<Phi>_uaf_bug_fixed} (in the
   generated theory @{text UAF_Phi_fixed_gen}) is rendered by @{text
   "scripts/generate_phi.py --core --executions"}, which adds the handshake edge from
-  mordor's per-execution reads-from relation (release-class writer) -- present
-  exactly in the free-bearing execution.  We take @{term Phi_uaf_fixed_hs} to BE
-  that generated future set; the proof below operates on it.  (Note the generated
-  @{term \<Phi>_uaf_bug_fixed_exec0} is the un-enriched edge-set -- the free-less
-  execution has no reclaimer read to order, so no edge is added there, which is more
-  faithful than uniform enrichment.)\<close>
+  mordor's per-execution reads-from relation (release-class writer).  For this program
+  the reader's release @{text "t1.2#0"} reads-to the reclaimer's read in BOTH
+  executions, so the edge is added to both @{term \<Phi>_uaf_bug_fixed_exec0} and
+  @{term \<Phi>_uaf_bug_fixed_exec1}.  We take @{term Phi_uaf_fixed_hs} to BE that
+  generated future set; the proof below operates on it.\<close>
 
 definition handshake_edge :: "(elabel \<times> elabel)" where
-  "handshake_edge = edge (t1_il 3) (t0_il 1)"   \<comment> \<open>@{text "t1.3#0 -> t0.1#0"}\<close>
+  "handshake_edge = edge (t1_il 2) (t0_il 1)"   \<comment> \<open>@{text "t1.2#0 -> t0.1#0"}\<close>
 
 definition Phi_uaf_fixed_hs_exec0 :: future where
-  "Phi_uaf_fixed_hs_exec0 = \<Phi>_uaf_bug_fixed_exec0"   \<comment> \<open>generated (un-enriched)\<close>
+  "Phi_uaf_fixed_hs_exec0 = \<Phi>_uaf_bug_fixed_exec0"   \<comment> \<open>generated (carries the handshake)\<close>
 
 definition Phi_uaf_fixed_hs_exec1 :: future where
   "Phi_uaf_fixed_hs_exec1 = \<Phi>_uaf_bug_fixed_exec1"   \<comment> \<open>generated (carries the handshake)\<close>
@@ -275,21 +278,23 @@ definition uaf_config :: "Phi \<Rightarrow> iloc \<Rightarrow> iloc \<Rightarrow
 
 section \<open>The witness history for the bug\<close>
 
-text \<open>The committed history that exhibits the UAF in the bug: the init writes, the
-  reader's RELAXED exit @{text "t1.2#0"}, and the reclaimer's rcu-read @{text
-  "t0.1#0"} -- but NOT the deref @{text "t1.1#0"}.  We only need its LABEL set; the
+text \<open>The committed history that exhibits the UAF in the bug: the init writes and the
+  acq_rel fence (@{text "g.1#0 .. g.5#0"}) and the reclaimer's rcu-read @{text
+  "t0.1#0"} -- but NOT the deref @{text "t1.1#0"} (nor the relaxed exit @{text
+  "t1.2#0"}, which the free does not depend on).  We only need its LABEL set; the
   actions are immaterial to the horizon (the horizon gate is over labels).  We pair
   each label with a dummy fence action (any action; the horizon ignores it).\<close>
 
 definition uaf_witness_H :: history where
   "uaf_witness_H =
    { (ev0 (g_il 1), Fence Rlx), (ev0 (g_il 2), Fence Rlx),
-     (ev0 (g_il 3), Fence Rlx), (ev0 (t1_il 2), Fence Rlx),
-     (ev0 (t0_il 1), Fence Rlx) }"
+     (ev0 (g_il 3), Fence Rlx), (ev0 (g_il 4), Fence Rlx),
+     (ev0 (g_il 5), Fence Rlx), (ev0 (t0_il 1), Fence Rlx) }"
 
 lemma hist_labels_uaf_witness:
   "hist_labels uaf_witness_H =
-     { ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (t1_il 2), ev0 (t0_il 1) }"
+     { ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4), ev0 (g_il 5),
+       ev0 (t0_il 1) }"
   by (auto simp: hist_labels_def uaf_witness_H_def ev_label_def)
 
 text \<open>Two distinct instruction-labels have distinct @{text "#0"} event-labels.\<close>
@@ -306,27 +311,27 @@ section \<open>The bug: the UAF is reachable\<close>
 
 text \<open>Core horizon fact: in the bug, @{text "free rC"} (@{text "t0.3#0"}) is in the
   horizon of @{term Phi_uaf} at the witness history, via the witness execution
-  @{term Phi_uaf_exec2}, whose predecessors of @{text "t0.3#0"} are exactly the
-  committed @{text "{g.1#0, g.2#0, t0.1#0}"}.\<close>
+  @{term Phi_uaf_exec1}, whose predecessors of @{text "t0.3#0"} are exactly the
+  committed @{text "{g.1#0, g.2#0, g.3#0, g.4#0, g.5#0, t0.1#0}"}.\<close>
 
-lemma exec2_consistent_witness:
-  "consistent Phi_uaf_exec2 uaf_witness_H"
-  \<comment> \<open>every committed-and-in-exec2 label has all its exec2 predecessors committed too\<close>
+lemma exec1_consistent_witness:
+  "consistent Phi_uaf_exec1 uaf_witness_H"
+  \<comment> \<open>every committed-and-in-exec1 label has all its exec1 predecessors committed too\<close>
   unfolding consistent_def hist_labels_uaf_witness
-  by (auto simp: Phi_uaf_exec2_def future_labels_def hist_labels_uaf_witness
+  by (simp add: Phi_uaf_exec1_def future_labels_def hist_labels_uaf_witness
                  ev0_eq_iff)
 
-lemma free_enabled_in_exec2:
-  "ev0 (t0_il 3) \<in> enabled_in Phi_uaf_exec2 uaf_witness_H"
-  \<comment> \<open>@{text "t0.3#0"} is an exec2 label, not yet committed, all preds committed\<close>
+lemma free_enabled_in_exec1:
+  "ev0 (t0_il 3) \<in> enabled_in Phi_uaf_exec1 uaf_witness_H"
+  \<comment> \<open>@{text "t0.3#0"} is an exec1 label, not yet committed, all preds committed\<close>
   unfolding enabled_in_def
-  by (auto simp: Phi_uaf_exec2_def future_labels_def hist_labels_uaf_witness
+  by (simp add: Phi_uaf_exec1_def future_labels_def hist_labels_uaf_witness
                  ev0_eq_iff)
 
 lemma free_enabled_bug:
   "free_enabled Phi_uaf bug_free_il uaf_witness_H"
   unfolding free_enabled_def bug_free_il_def horizon_lbls_def
-  using exec2_consistent_witness free_enabled_in_exec2
+  using exec1_consistent_witness free_enabled_in_exec1
   by (auto simp: Phi_uaf_def)
 
 lemma deref_pending_bug:
@@ -348,73 +353,79 @@ text \<open>The end-to-end statement, against the @{term opsem_client} locale's
   Phi_uaf)"} that is a UAF config (free of @{text rC} enabled, deref of @{text rC}
   pending).\<close>
 
-subsection \<open>The reachability step chain (single live future @{term Phi_uaf_exec2})\<close>
+subsection \<open>The reachability step chain (single live future @{term Phi_uaf_exec1})\<close>
 
-text \<open>We commit exactly @{term Phi_uaf_exec2}'s labels, in a topological order, so
-  that exec2 stays @{term consistent} throughout and each leading label is
-  @{term enabled_in} exec2 -- hence in @{term horizon_lbls} -- at the history just
-  before it fires.  The deref @{text "t1.1#0"} is NOT an exec2 label, so it is never
-  committed: it stays pending, and the chain ends in a UAF config.
+text \<open>We commit exactly @{term Phi_uaf_exec1}'s init-and-reclaimer labels, in a
+  topological order, so that exec1 stays @{term consistent} throughout and each leading
+  label is @{term enabled_in} exec1 -- hence in @{term horizon_lbls} -- at the history
+  just before it fires.  The deref @{text "t1.1#0"} is committed neither, so it stays
+  pending, and the chain ends in a UAF config.
 
   The horizon gate depends only on the LABELS of a history, so we reason about each
   step's history through its label set @{term hist_labels}.\<close>
 
-text \<open>The label sets along the chain @{text "g.1, g.3, g.2, t1.2, t0.1"} (each
+text \<open>The label sets along the chain @{text "g.1, g.2, g.3, g.4, g.5, t0.1"} (each
   history is the previous one plus the new instruction's leading label).\<close>
 
 abbreviation (input) "L0 \<equiv> ({} :: elabel set)"
 abbreviation (input) "L1 \<equiv> {ev0 (g_il 1)}"
-abbreviation (input) "L2 \<equiv> {ev0 (g_il 1), ev0 (g_il 3)}"
-abbreviation (input) "L3 \<equiv> {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2)}"
-abbreviation (input) "L4 \<equiv> {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2), ev0 (t1_il 2)}"
+abbreviation (input) "L2 \<equiv> {ev0 (g_il 1), ev0 (g_il 2)}"
+abbreviation (input) "L3 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3)}"
+abbreviation (input) "L4 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4)}"
+abbreviation (input) "L5 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4),
+                             ev0 (g_il 5)}"
 
-text \<open>exec2 is consistent with each chain history (each is an exec2-downward-closed
+text \<open>exec1 is consistent with each chain history (each is an exec1-downward-closed
   prefix).\<close>
-lemma exec2_consistent_chain:
-  "hist_labels H = L0 \<Longrightarrow> consistent Phi_uaf_exec2 H"
-  "hist_labels H = L1 \<Longrightarrow> consistent Phi_uaf_exec2 H"
-  "hist_labels H = L2 \<Longrightarrow> consistent Phi_uaf_exec2 H"
-  "hist_labels H = L3 \<Longrightarrow> consistent Phi_uaf_exec2 H"
-  "hist_labels H = L4 \<Longrightarrow> consistent Phi_uaf_exec2 H"
+lemma exec1_consistent_chain:
+  "hist_labels H = L0 \<Longrightarrow> consistent Phi_uaf_exec1 H"
+  "hist_labels H = L1 \<Longrightarrow> consistent Phi_uaf_exec1 H"
+  "hist_labels H = L2 \<Longrightarrow> consistent Phi_uaf_exec1 H"
+  "hist_labels H = L3 \<Longrightarrow> consistent Phi_uaf_exec1 H"
+  "hist_labels H = L4 \<Longrightarrow> consistent Phi_uaf_exec1 H"
+  "hist_labels H = L5 \<Longrightarrow> consistent Phi_uaf_exec1 H"
   unfolding consistent_def
-  by (auto simp: Phi_uaf_exec2_def future_labels_def ev0_eq_iff)
+  by (simp_all add: Phi_uaf_exec1_def future_labels_def ev0_eq_iff)
 
-text \<open>Each chain step's leading label is enabled in exec2 at its history.\<close>
-lemma exec2_enabled_chain:
-  "hist_labels H = L0 \<Longrightarrow> ev0 (g_il 1) \<in> enabled_in Phi_uaf_exec2 H"
-  "hist_labels H = L1 \<Longrightarrow> ev0 (g_il 3) \<in> enabled_in Phi_uaf_exec2 H"
-  "hist_labels H = L2 \<Longrightarrow> ev0 (g_il 2) \<in> enabled_in Phi_uaf_exec2 H"
-  "hist_labels H = L3 \<Longrightarrow> ev0 (t1_il 2) \<in> enabled_in Phi_uaf_exec2 H"
-  "hist_labels H = L4 \<Longrightarrow> ev0 (t0_il 1) \<in> enabled_in Phi_uaf_exec2 H"
+text \<open>Each chain step's leading label is enabled in exec1 at its history.\<close>
+lemma exec1_enabled_chain:
+  "hist_labels H = L0 \<Longrightarrow> ev0 (g_il 1) \<in> enabled_in Phi_uaf_exec1 H"
+  "hist_labels H = L1 \<Longrightarrow> ev0 (g_il 2) \<in> enabled_in Phi_uaf_exec1 H"
+  "hist_labels H = L2 \<Longrightarrow> ev0 (g_il 3) \<in> enabled_in Phi_uaf_exec1 H"
+  "hist_labels H = L3 \<Longrightarrow> ev0 (g_il 4) \<in> enabled_in Phi_uaf_exec1 H"
+  "hist_labels H = L4 \<Longrightarrow> ev0 (g_il 5) \<in> enabled_in Phi_uaf_exec1 H"
+  "hist_labels H = L5 \<Longrightarrow> ev0 (t0_il 1) \<in> enabled_in Phi_uaf_exec1 H"
   unfolding enabled_in_def
-  by (auto simp: Phi_uaf_exec2_def future_labels_def ev0_eq_iff)
+  by (simp_all add: Phi_uaf_exec1_def future_labels_def ev0_eq_iff)
 
 text \<open>A single clean introduction rule for horizon membership via ONE witnessing
-  future -- avoids @{method auto} searching all eight executions.\<close>
+  future -- avoids @{method auto} searching all executions.\<close>
 lemma in_horizon_lblsI:
   assumes "F \<in> Phi" and "consistent F H" and "l \<in> enabled_in F H"
   shows "l \<in> horizon_lbls Phi H"
   unfolding horizon_lbls_def using assms by blast
 
-lemma exec2_in_Phi_uaf: "Phi_uaf_exec2 \<in> Phi_uaf"
+lemma exec1_in_Phi_uaf: "Phi_uaf_exec1 \<in> Phi_uaf"
   by (simp add: Phi_uaf_def)
 
 text \<open>Combining the two: each leading label is in the GLOBAL horizon (via the
-  consistent exec2).\<close>
+  consistent exec1).\<close>
 lemma horizon_lbls_chain1: "hist_labels H = L0 \<Longrightarrow> ev0 (g_il 1) \<in> horizon_lbls Phi_uaf H"
-  by (rule in_horizon_lblsI[OF exec2_in_Phi_uaf exec2_consistent_chain(1) exec2_enabled_chain(1)]) assumption+
-lemma horizon_lbls_chain2: "hist_labels H = L1 \<Longrightarrow> ev0 (g_il 3) \<in> horizon_lbls Phi_uaf H"
-  by (rule in_horizon_lblsI[OF exec2_in_Phi_uaf exec2_consistent_chain(2) exec2_enabled_chain(2)]) assumption+
-lemma horizon_lbls_chain3: "hist_labels H = L2 \<Longrightarrow> ev0 (g_il 2) \<in> horizon_lbls Phi_uaf H"
-  by (rule in_horizon_lblsI[OF exec2_in_Phi_uaf exec2_consistent_chain(3) exec2_enabled_chain(3)]) assumption+
-lemma horizon_lbls_chain4: "hist_labels H = L3 \<Longrightarrow> ev0 (t1_il 2) \<in> horizon_lbls Phi_uaf H"
-  by (rule in_horizon_lblsI[OF exec2_in_Phi_uaf exec2_consistent_chain(4) exec2_enabled_chain(4)]) assumption+
-lemma horizon_lbls_chain5: "hist_labels H = L4 \<Longrightarrow> ev0 (t0_il 1) \<in> horizon_lbls Phi_uaf H"
-  by (rule in_horizon_lblsI[OF exec2_in_Phi_uaf exec2_consistent_chain(5) exec2_enabled_chain(5)]) assumption+
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(1) exec1_enabled_chain(1)]) assumption+
+lemma horizon_lbls_chain2: "hist_labels H = L1 \<Longrightarrow> ev0 (g_il 2) \<in> horizon_lbls Phi_uaf H"
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(2) exec1_enabled_chain(2)]) assumption+
+lemma horizon_lbls_chain3: "hist_labels H = L2 \<Longrightarrow> ev0 (g_il 3) \<in> horizon_lbls Phi_uaf H"
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(3) exec1_enabled_chain(3)]) assumption+
+lemma horizon_lbls_chain4: "hist_labels H = L3 \<Longrightarrow> ev0 (g_il 4) \<in> horizon_lbls Phi_uaf H"
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(4) exec1_enabled_chain(4)]) assumption+
+lemma horizon_lbls_chain5: "hist_labels H = L4 \<Longrightarrow> ev0 (g_il 5) \<in> horizon_lbls Phi_uaf H"
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(5) exec1_enabled_chain(5)]) assumption+
+lemma horizon_lbls_chain6: "hist_labels H = L5 \<Longrightarrow> ev0 (t0_il 1) \<in> horizon_lbls Phi_uaf H"
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(6) exec1_enabled_chain(6)]) assumption+
 
 lemmas horizon_lbls_chain =
   horizon_lbls_chain1 horizon_lbls_chain2 horizon_lbls_chain3
-  horizon_lbls_chain4 horizon_lbls_chain5
+  horizon_lbls_chain4 horizon_lbls_chain5 horizon_lbls_chain6
 
 text \<open>@{term instr_sublabel} of a @{term sub}-label at @{text 0} is itself.\<close>
 lemma instr_sublabel_ev0 [simp]: "instr_sublabel (ev0 l) 0 = ev0 l"
@@ -433,16 +444,16 @@ lemma hist_labels_commit_single:
 lemma hist_labels_empty [simp]: "hist_labels {} = {}"
   by (simp add: hist_labels_def)
 
-text \<open>Now the explicit five-step chain.  Each step is the @{term Step} rule with a
-  single-action command (Malloc / WritePtr / ReadPtr), whose leading label is in the
-  horizon by @{thm horizon_lbls_chain}.  We track ONLY the history's label set; the
-  @{term \<sigma>} / @{term \<rho>} are threaded existentially.\<close>
+text \<open>Now the explicit six-step chain.  Each step is the @{term Step} rule with a
+  single-action command (Malloc / WritePtr / CFence / ReadPtr), whose leading label is
+  in the horizon by @{thm horizon_lbls_chain}.  We track ONLY the history's label set;
+  the @{term \<sigma>} / @{term \<rho>} are threaded existentially.\<close>
 
 lemma reachable_uaf_chain:
   "\<exists>\<sigma> \<rho> H. opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H) \<and>
-            (step prog_uaf_bug Phi_uaf ^^ 5) init_config (\<sigma>, \<rho>, H) \<and>
-            hist_labels H = {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2),
-                             ev0 (t1_il 2), ev0 (t0_il 1)}"
+            (step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>, \<rho>, H) \<and>
+            hist_labels H = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3),
+                             ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
 proof -
   define R where "R \<equiv> opsem_client.reachable prog_uaf_bug Phi_uaf"
   \<comment> \<open>helper: one @{term Step} of a single-action command, given horizon membership\<close>
@@ -477,20 +488,21 @@ proof -
   have r1: "R (\<sigma>1, \<rho>1, H1)"
     unfolding R_def using r0[unfolded R_def] s1
     by (rule opsem_client.reachable_step)
-  \<comment> \<open>step 1: commit g.3 (Malloc rcu)\<close>
+  \<comment> \<open>step 1: commit g.2 (WritePtr *rC := 0)\<close>
   obtain \<sigma>2 \<rho>2 H2 where
     s2: "step prog_uaf_bug Phi_uaf (\<sigma>1, \<rho>1, H1) (\<sigma>2, \<rho>2, H2)"
     and h2: "hist_labels H2 = L2"
   proof -
+    define act where "act = Write Rlx (resolve_loc \<rho>1 (EReg vC)) (subst_expr \<rho>1 (EInt 0))"
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 3) (Malloc vrcu (EInt 1)) \<rho>1 = Some (abar, las, \<rho>')"
-      and abar: "abar = [AllocA (fresh \<rho>1) (EInt 1)]"
-      and las: "las = [(sub (g_il 3) 0, AllocA (fresh \<rho>1) (EInt 1))]"
-      by (auto simp: next_sym_def Let_def split: prod.splits)
-    have inh: "in_horizon (horizon_label (g_il 3)) abar Phi_uaf H1"
+      ce: "cmd_effect False (g_il 2) (WritePtr Rlx (EReg vC) (EInt 0)) \<rho>1 = Some (abar, las, \<rho>')"
+      and abar: "abar = [act]"
+      and las: "las = [(sub (g_il 2) 0, act)]"
+      by (auto simp: act_def Let_def)
+    have inh: "in_horizon (horizon_label (g_il 2)) abar Phi_uaf H1"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(2)[OF h1] by simp
-    have mem: "(g_il 3 is Malloc vrcu (EInt 1)) \<in> set prog_uaf_bug"
+    have mem: "(g_il 2 is WritePtr Rlx (EReg vC) (EInt 0)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
     let ?st = "(apply_actions las \<sigma>1, \<rho>', commit_events las H1)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>1, \<rho>1, H1) ?st"
@@ -501,21 +513,20 @@ proof -
   qed
   have r2: "R (\<sigma>2, \<rho>2, H2)"
     unfolding R_def using r1[unfolded R_def] s2 by (rule opsem_client.reachable_step)
-  \<comment> \<open>step 2: commit g.2 (WritePtr *rC := 0)\<close>
+  \<comment> \<open>step 2: commit g.3 (Malloc rcu)\<close>
   obtain \<sigma>3 \<rho>3 H3 where
     s3: "step prog_uaf_bug Phi_uaf (\<sigma>2, \<rho>2, H2) (\<sigma>3, \<rho>3, H3)"
     and h3: "hist_labels H3 = L3"
   proof -
-    define act where "act = Write Rlx (resolve_loc \<rho>2 (EReg vC)) (subst_expr \<rho>2 (EInt 0))"
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 2) (WritePtr Rlx (EReg vC) (EInt 0)) \<rho>2 = Some (abar, las, \<rho>')"
-      and abar: "abar = [act]"
-      and las: "las = [(sub (g_il 2) 0, act)]"
-      by (auto simp: act_def Let_def)
-    have inh: "in_horizon (horizon_label (g_il 2)) abar Phi_uaf H2"
+      ce: "cmd_effect False (g_il 3) (Malloc vrcu (EInt 1)) \<rho>2 = Some (abar, las, \<rho>')"
+      and abar: "abar = [AllocA (fresh \<rho>2) (EInt 1)]"
+      and las: "las = [(sub (g_il 3) 0, AllocA (fresh \<rho>2) (EInt 1))]"
+      by (auto simp: next_sym_def Let_def split: prod.splits)
+    have inh: "in_horizon (horizon_label (g_il 3)) abar Phi_uaf H2"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(3)[OF h2] by simp
-    have mem: "(g_il 2 is WritePtr Rlx (EReg vC) (EInt 0)) \<in> set prog_uaf_bug"
+    have mem: "(g_il 3 is Malloc vrcu (EInt 1)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
     let ?st = "(apply_actions las \<sigma>2, \<rho>', commit_events las H2)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>2, \<rho>2, H2) ?st"
@@ -526,21 +537,21 @@ proof -
   qed
   have r3: "R (\<sigma>3, \<rho>3, H3)"
     unfolding R_def using r2[unfolded R_def] s3 by (rule opsem_client.reachable_step)
-  \<comment> \<open>step 3: commit t1.2 (WritePtr *rcu := 0, the relaxed exit)\<close>
+  \<comment> \<open>step 3: commit g.4 (WritePtr *rcu := 1)\<close>
   obtain \<sigma>4 \<rho>4 H4 where
     s4: "step prog_uaf_bug Phi_uaf (\<sigma>3, \<rho>3, H3) (\<sigma>4, \<rho>4, H4)"
     and h4: "hist_labels H4 = L4"
   proof -
-    define act where "act = Write Rlx (resolve_loc \<rho>3 (EReg vrcu)) (subst_expr \<rho>3 (EInt 0))"
+    define act where "act = Write Rlx (resolve_loc \<rho>3 (EReg vrcu)) (subst_expr \<rho>3 (EInt 1))"
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (t1_il 2) (WritePtr Rlx (EReg vrcu) (EInt 0)) \<rho>3 = Some (abar, las, \<rho>')"
+      ce: "cmd_effect False (g_il 4) (WritePtr Rlx (EReg vrcu) (EInt 1)) \<rho>3 = Some (abar, las, \<rho>')"
       and abar: "abar = [act]"
-      and las: "las = [(sub (t1_il 2) 0, act)]"
+      and las: "las = [(sub (g_il 4) 0, act)]"
       by (auto simp: act_def Let_def)
-    have inh: "in_horizon (horizon_label (t1_il 2)) abar Phi_uaf H3"
+    have inh: "in_horizon (horizon_label (g_il 4)) abar Phi_uaf H3"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(4)[OF h3] by simp
-    have mem: "(t1_il 2 is WritePtr Rlx (EReg vrcu) (EInt 0)) \<in> set prog_uaf_bug"
+    have mem: "(g_il 4 is WritePtr Rlx (EReg vrcu) (EInt 1)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
     let ?st = "(apply_actions las \<sigma>3, \<rho>', commit_events las H3)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>3, \<rho>3, H3) ?st"
@@ -551,44 +562,69 @@ proof -
   qed
   have r4: "R (\<sigma>4, \<rho>4, H4)"
     unfolding R_def using r3[unfolded R_def] s4 by (rule opsem_client.reachable_step)
-  \<comment> \<open>step 4: commit t0.1 (ReadPtr rtemp := *rcu)\<close>
+  \<comment> \<open>step 4: commit g.5 (CFence acq_rel)\<close>
   obtain \<sigma>5 \<rho>5 H5 where
     s5: "step prog_uaf_bug Phi_uaf (\<sigma>4, \<rho>4, H4) (\<sigma>5, \<rho>5, H5)"
-    and h5: "hist_labels H5 = {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2),
-                                ev0 (t1_il 2), ev0 (t0_il 1)}"
+    and h5: "hist_labels H5 = L5"
   proof -
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (t0_il 1) (ReadPtr Rlx rtemp (EReg vrcu)) \<rho>4 = Some (abar, las, \<rho>')"
-      and abar: "abar = [Read Rlx (resolve_loc \<rho>4 (EReg vrcu)) (fresh \<rho>4)]"
-      and las: "las = [(sub (t0_il 1) 0, Read Rlx (resolve_loc \<rho>4 (EReg vrcu)) (fresh \<rho>4))]"
-      by (auto simp: next_sym_def Let_def split: prod.splits)
-    have inh: "in_horizon (horizon_label (t0_il 1)) abar Phi_uaf H4"
+      ce: "cmd_effect False (g_il 5) (CFence Acq_rel) \<rho>4 = Some (abar, las, \<rho>')"
+      and abar: "abar = [Fence Acq_rel]"
+      and las: "las = [(sub (g_il 5) 0, Fence Acq_rel)]"
+      by (auto simp: Let_def)
+    have inh: "in_horizon (horizon_label (g_il 5)) abar Phi_uaf H4"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(5)[OF h4] by simp
-    have mem: "(t0_il 1 is ReadPtr Rlx rtemp (EReg vrcu)) \<in> set prog_uaf_bug"
+    have mem: "(g_il 5 is CFence Acq_rel) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
     let ?st = "(apply_actions las \<sigma>4, \<rho>', commit_events las H4)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>4, \<rho>4, H4) ?st"
       by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
-    have "hist_labels (commit_events las H4) =
-            {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2), ev0 (t1_il 2), ev0 (t0_il 1)}"
+    have "hist_labels (commit_events las H4) = L5"
       by (auto simp: las hist_labels_commit_single h4 ev0_def)
     with stp show thesis using that by blast
   qed
   have r5: "R (\<sigma>5, \<rho>5, H5)"
     unfolding R_def using r4[unfolded R_def] s5 by (rule opsem_client.reachable_step)
-  \<comment> \<open>The SAME chain, counted: exactly five @{term step} applications reach the UAF
-      config, as a machine-checked relation-power fact @{text "step ^^ 5"}.\<close>
+  \<comment> \<open>step 5: commit t0.1 (ReadPtr rtemp := *rcu)\<close>
+  obtain \<sigma>6 \<rho>6 H6 where
+    s6: "step prog_uaf_bug Phi_uaf (\<sigma>5, \<rho>5, H5) (\<sigma>6, \<rho>6, H6)"
+    and h6: "hist_labels H6 = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3),
+                                ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
+  proof -
+    obtain abar las \<rho>' where
+      ce: "cmd_effect False (t0_il 1) (ReadPtr Rlx rtemp (EReg vrcu)) \<rho>5 = Some (abar, las, \<rho>')"
+      and abar: "abar = [Read Rlx (resolve_loc \<rho>5 (EReg vrcu)) (fresh \<rho>5)]"
+      and las: "las = [(sub (t0_il 1) 0, Read Rlx (resolve_loc \<rho>5 (EReg vrcu)) (fresh \<rho>5))]"
+      by (auto simp: next_sym_def Let_def split: prod.splits)
+    have inh: "in_horizon (horizon_label (t0_il 1)) abar Phi_uaf H5"
+      unfolding in_horizon_def horizon_label_eq_ev0 abar
+      using horizon_lbls_chain(6)[OF h5] by simp
+    have mem: "(t0_il 1 is ReadPtr Rlx rtemp (EReg vrcu)) \<in> set prog_uaf_bug"
+      by (simp add: prog_uaf_bug_def)
+    let ?st = "(apply_actions las \<sigma>5, \<rho>', commit_events las H5)"
+    have stp: "step prog_uaf_bug Phi_uaf (\<sigma>5, \<rho>5, H5) ?st"
+      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+    have "hist_labels (commit_events las H5) =
+            {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4), ev0 (g_il 5),
+             ev0 (t0_il 1)}"
+      by (auto simp: las hist_labels_commit_single h5 ev0_def)
+    with stp show thesis using that by blast
+  qed
+  have r6: "R (\<sigma>6, \<rho>6, H6)"
+    unfolding R_def using r5[unfolded R_def] s6 by (rule opsem_client.reachable_step)
+  \<comment> \<open>The SAME chain, counted: exactly six @{term step} applications reach the UAF
+      config, as a machine-checked relation-power fact @{text "step ^^ 6"}.\<close>
   have p0: "(step prog_uaf_bug Phi_uaf ^^ 0) init_config init_config" by simp
-  have p5suc: "(step prog_uaf_bug Phi_uaf ^^ Suc (Suc (Suc (Suc (Suc 0)))))
-                 init_config (\<sigma>5, \<rho>5, H5)"
+  have p6suc: "(step prog_uaf_bug Phi_uaf ^^ Suc (Suc (Suc (Suc (Suc (Suc 0))))))
+                 init_config (\<sigma>6, \<rho>6, H6)"
     by (rule relpowp_Suc_I[OF relpowp_Suc_I[OF relpowp_Suc_I[OF relpowp_Suc_I[OF
-            relpowp_Suc_I[OF p0 s1] s2] s3] s4] s5])
-  have five: "(5::nat) = Suc (Suc (Suc (Suc (Suc 0))))" by simp
-  have p5: "(step prog_uaf_bug Phi_uaf ^^ 5) init_config (\<sigma>5, \<rho>5, H5)"
-    unfolding five by (rule p5suc)
+            relpowp_Suc_I[OF relpowp_Suc_I[OF p0 s1] s2] s3] s4] s5] s6])
+  have six: "(6::nat) = Suc (Suc (Suc (Suc (Suc (Suc 0)))))" by simp
+  have p6: "(step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>6, \<rho>6, H6)"
+    unfolding six by (rule p6suc)
   show ?thesis
-    using r5[unfolded R_def] p5 h5 by blast
+    using r6[unfolded R_def] p6 h6 by blast
 qed
 
 text \<open>The horizon facts depend only on a history's LABEL set, so the chain's final
@@ -608,9 +644,9 @@ lemma free_enabled_of_labels:
   assumes "hist_labels H = hist_labels uaf_witness_H"
   shows "free_enabled Phi_uaf bug_free_il H"
   unfolding free_enabled_def bug_free_il_def
-  apply (rule in_horizon_lblsI[OF exec2_in_Phi_uaf])
-   apply (subst consistent_cong[OF assms]; rule exec2_consistent_witness)
-  apply (subst enabled_in_cong[OF assms]; rule free_enabled_in_exec2)
+  apply (rule in_horizon_lblsI[OF exec1_in_Phi_uaf])
+   apply (subst consistent_cong[OF assms]; rule exec1_consistent_witness)
+  apply (subst enabled_in_cong[OF assms]; rule free_enabled_in_exec1)
   done
 
 lemma deref_pending_of_labels:
@@ -624,11 +660,11 @@ theorem uaf_reachable_bug:
 proof -
   from reachable_uaf_chain obtain \<sigma> \<rho> H where
     reach: "opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H)"
-    and hl: "hist_labels H = {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2),
-                              ev0 (t1_il 2), ev0 (t0_il 1)}"
+    and hl: "hist_labels H = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3),
+                              ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
     by blast
   have eq: "hist_labels H = hist_labels uaf_witness_H"
-    by (simp add: hl hist_labels_uaf_witness) blast
+    by (simp add: hl hist_labels_uaf_witness)
   have "uaf_config Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
     unfolding uaf_config_def
     using free_enabled_of_labels[OF eq] deref_pending_of_labels[OF eq] by simp
@@ -636,63 +672,68 @@ proof -
 qed
 
 text \<open>The DERIVATION-LENGTH refinement of @{thm uaf_reachable_bug}: the UAF config
-  is reached in EXACTLY FIVE applications of the operational-semantics @{term step}
+  is reached in EXACTLY SIX applications of the operational-semantics @{term step}
   relation (each an instance of the single @{text Step} rule), out of the
-  eight-instruction program @{term prog_uaf_bug}.  The count @{text 5} is
-  kernel-checked here via the relation power @{text "step ^^ 5"} -- a concrete,
+  nine-instruction program @{term prog_uaf_bug}.  The count @{text 6} is
+  kernel-checked here via the relation power @{text "step ^^ 6"} -- a concrete,
   machine-verified complexity figure for the paper's headline example.\<close>
-theorem uaf_reached_in_5_steps:
-  "\<exists>cfg. (step prog_uaf_bug Phi_uaf ^^ 5) init_config cfg \<and>
+theorem uaf_reached_in_6_steps:
+  "\<exists>cfg. (step prog_uaf_bug Phi_uaf ^^ 6) init_config cfg \<and>
          uaf_config Phi_uaf bug_free_il bug_deref_il cfg"
 proof -
   from reachable_uaf_chain obtain \<sigma> \<rho> H where
-    pw: "(step prog_uaf_bug Phi_uaf ^^ 5) init_config (\<sigma>, \<rho>, H)"
-    and hl: "hist_labels H = {ev0 (g_il 1), ev0 (g_il 3), ev0 (g_il 2),
-                              ev0 (t1_il 2), ev0 (t0_il 1)}"
+    pw: "(step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>, \<rho>, H)"
+    and hl: "hist_labels H = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3),
+                              ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
     by blast
   have eq: "hist_labels H = hist_labels uaf_witness_H"
-    by (simp add: hl hist_labels_uaf_witness) blast
+    by (simp add: hl hist_labels_uaf_witness)
   have "uaf_config Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
     unfolding uaf_config_def
     using free_enabled_of_labels[OF eq] deref_pending_of_labels[OF eq] by simp
   with pw show ?thesis by blast
 qed
 
-text \<open>The program has eight instructions, so the derivation is strictly shorter than
+text \<open>The program has nine instructions, so the derivation is strictly shorter than
   the program is long -- a linear (indeed sub-length) bound for this example.\<close>
-lemma prog_uaf_bug_length: "length prog_uaf_bug = 8"
+lemma prog_uaf_bug_length: "length prog_uaf_bug = 9"
   by (simp add: prog_uaf_bug_def)
 
 
 section \<open>The fix: the UAF is excluded\<close>
 
 text \<open>The structural discriminator, mechanically checked: the deref->exit ppo edge
-  @{text "t1.2#0 -> t1.3#0"} is PRESENT in every future of the FIXED program but
+  @{text "t1.1#0 -> t1.2#0"} is PRESENT in every future of the FIXED program but
   ABSENT in every future of the BUG program.  This is the single source of the
   bug-vs-fixed difference.\<close>
 
 lemma deref_exit_edge_present_fixed:
   "\<forall>F \<in> Phi_uaf_fixed. edge (fix_deref_il) (fix_exit_il) \<in> F"
   unfolding Phi_uaf_fixed_def fix_deref_il_def fix_exit_il_def
-  by (auto simp: Phi_uaf_fixed_exec0_def Phi_uaf_fixed_exec1_def)
+  by (simp add: Phi_uaf_fixed_exec0_def Phi_uaf_fixed_exec1_def)
 
 lemma deref_exit_edge_absent_bug:
   "\<forall>F \<in> Phi_uaf. edge (bug_deref_il) (bug_exit_il) \<notin> F"
   \<comment> \<open>the relaxed exit creates NO ppo edge from the deref -- the absent discriminator\<close>
   unfolding Phi_uaf_def bug_deref_il_def bug_exit_il_def
-  by (auto simp: Phi_uaf_exec0_def Phi_uaf_exec1_def Phi_uaf_exec2_def
-                 Phi_uaf_exec3_def Phi_uaf_exec4_def Phi_uaf_exec5_def
-                 Phi_uaf_exec6_def Phi_uaf_exec7_def ev0_eq_iff)
+  by (simp add: Phi_uaf_exec0_def Phi_uaf_exec1_def ev0_eq_iff)
 
 text \<open>In the fixed program, the ONLY future containing @{text "free rC"}
   (@{text "t0.3#0"}) is @{term Phi_uaf_fixed_exec1}; @{term Phi_uaf_fixed_exec0}
   has no free at all.\<close>
 
+lemma free_not_in_fixed_exec0:
+  "ev0 (t0_il 3) \<notin> future_labels Phi_uaf_fixed_exec0"
+  by (simp add: Phi_uaf_fixed_exec0_def future_labels_def ev0_eq_iff)
+
 lemma free_only_in_fixed_exec1:
-  "ev0 (t0_il 3) \<in> future_labels F \<Longrightarrow> F \<in> Phi_uaf_fixed \<Longrightarrow> F = Phi_uaf_fixed_exec1"
-  unfolding Phi_uaf_fixed_def
-  by (auto simp: Phi_uaf_fixed_exec0_def Phi_uaf_fixed_exec1_def
-                 future_labels_def ev0_eq_iff)
+  assumes "ev0 (t0_il 3) \<in> future_labels F" and "F \<in> Phi_uaf_fixed"
+  shows "F = Phi_uaf_fixed_exec1"
+proof -
+  from assms(2) have "F = Phi_uaf_fixed_exec0 \<or> F = Phi_uaf_fixed_exec1"
+    by (simp add: Phi_uaf_fixed_def)
+  with assms(1) free_not_in_fixed_exec0 show ?thesis by blast
+qed
 
 
 text \<open>HONESTY NOTE on the exclusion.  The intended end-to-end statement is
@@ -705,48 +746,53 @@ text \<open>HONESTY NOTE on the exclusion.  The intended end-to-end statement is
   FALSE at the horizon level, for a concrete and instructive reason.
 
   In @{term Phi_uaf_fixed_exec1} (the only future containing the free, @{thm
-  free_only_in_fixed_exec1}) the predecessors of the free @{text "t0.3#0"} are just
-  @{text "{g.1#0, t0.1#0}"} (edges @{text "g.1#0 -> t0.3#0"} and @{text "t0.1#0 ->
-  t0.3#0"}); the deref @{text "t1.2#0"} is NOT among them.  So a history committing
-  exactly @{text "{g.1#0, t0.1#0}"} (reachable: step the alloc of rC, then the
-  reclaimer's relaxed rcu-read, both source labels of exec1) has the free ENABLED
-  while the deref is still PENDING -- a UAF config -- and that history IS reachable.
+  free_only_in_fixed_exec1}) the predecessors of the free @{text "t0.3#0"} are the init
+  labels and the reclaimer read @{text "{g.1#0, g.2#0, g.3#0, g.4#0, g.5#0, t0.1#0}"};
+  the deref @{text "t1.1#0"} is NOT among them.  So a history committing exactly those
+  labels (reachable: step the init through the fence, then the reclaimer's relaxed
+  rcu-read, all source labels of exec1) has the free ENABLED while the deref is still
+  PENDING -- a UAF config -- and that history IS reachable.
 
-  Why: the release exit @{text "t1.3"} DOES carry the deref->exit ppo edge @{text
-  "t1.2#0 -> t1.3#0"} (proved, @{thm deref_exit_edge_present_fixed}; absent in the
+  Why: the release exit @{text "t1.2"} DOES carry the deref->exit ppo edge @{text
+  "t1.1#0 -> t1.2#0"} (proved, @{thm deref_exit_edge_present_fixed}; absent in the
   bug, @{thm deref_exit_edge_absent_bug}), but the property that EXCLUDES the UAF is
   the cross-thread SYNCHRONIZES-WITH / DP edge tying the RECLAIMER'S read @{text
-  "t0.1#0"} to the reader's release @{text "t1.3#0"} (an rf/DP edge @{text "t1.3#0 ->
-  t0.1#0"}, hence transitively @{text "t1.2#0 -> t0.1#0 -> t0.3#0"}).  That edge is a
-  per-EXECUTION dependence the single-program @{term futures} rendering does not emit
-  here, so the rendered @{term Phi_uaf_fixed} under-constrains the reclaimer.  The
-  exclusion therefore needs a Phi enriched with that handshake DP edge (the proper
+  "t0.1#0"} to the reader's release @{text "t1.2#0"} (an rf/DP edge @{text "t1.2#0 ->
+  t0.1#0"}, hence transitively @{text "t1.1#0 -> t1.2#0 -> t0.1#0 -> t0.3#0"}).  That
+  edge is a per-EXECUTION dependence the single-program @{term futures} rendering does
+  not emit here, so the rendered @{term Phi_uaf_fixed} under-constrains the reclaimer.
+  The exclusion therefore needs a Phi enriched with that handshake DP edge (the proper
   cross-thread @{text "ppo \<union> DP"}), OR a path-predicate (@{term phi}) argument at the
   MemSem level showing the reclaimer's branch @{text "rtemp = 0"} cannot be taken
   before the reader's release commits.  Neither is captured by the provisional Phi
   of @{text "uaf-bug-fixed"}.
 
-  We record the honest counter-fact below and leave the intended exclusion as an
-  explicit @{text sorry}: it is the genuine open obligation, gated on a richer Phi.\<close>
+  We record the honest counter-fact below, then discharge the intended exclusion over
+  the handshake-enriched @{term Phi_uaf_fixed_hs} (which mordor now emits, since the
+  render carries the reads-from-derived handshake edge).\<close>
 
 text \<open>The witness history that REFUTES horizon-level exclusion against the provisional
-  @{term Phi_uaf_fixed}: just the alloc of rC and the reclaimer's rcu-read.\<close>
+  @{term Phi_uaf_fixed}: the init through the fence, plus the reclaimer's rcu-read.\<close>
 definition fix_bad_H :: history where
-  "fix_bad_H = { (ev0 (g_il 1), Fence Rlx), (ev0 (t0_il 1), Fence Rlx) }"
+  "fix_bad_H = { (ev0 (g_il 1), Fence Rlx), (ev0 (g_il 2), Fence Rlx),
+                 (ev0 (g_il 3), Fence Rlx), (ev0 (g_il 4), Fence Rlx),
+                 (ev0 (g_il 5), Fence Rlx), (ev0 (t0_il 1), Fence Rlx) }"
 
 lemma hist_labels_fix_bad_H:
-  "hist_labels fix_bad_H = { ev0 (g_il 1), ev0 (t0_il 1) }"
+  "hist_labels fix_bad_H =
+     { ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4), ev0 (g_il 5),
+       ev0 (t0_il 1) }"
   by (auto simp: hist_labels_def fix_bad_H_def ev_label_def)
 
 lemma fix_exec1_consistent_bad:
   "consistent Phi_uaf_fixed_exec1 fix_bad_H"
   unfolding consistent_def hist_labels_fix_bad_H
-  by (auto simp: Phi_uaf_fixed_exec1_def future_labels_def ev0_eq_iff)
+  by (simp add: Phi_uaf_fixed_exec1_def future_labels_def ev0_eq_iff)
 
 lemma fix_free_enabled_bad:
   "ev0 (t0_il 3) \<in> enabled_in Phi_uaf_fixed_exec1 fix_bad_H"
   unfolding enabled_in_def
-  by (auto simp: Phi_uaf_fixed_exec1_def future_labels_def
+  by (simp add: Phi_uaf_fixed_exec1_def future_labels_def
                  hist_labels_fix_bad_H ev0_eq_iff)
 
 text \<open>Honest counter-fact: under the provisional @{term Phi_uaf_fixed}, the free is
@@ -788,15 +834,15 @@ text \<open>We now discharge the exclusion against @{term Phi_uaf_fixed_hs}, the
 text \<open>The labels of the enriched free-bearing future.\<close>
 lemma future_labels_fixed_hs_exec1:
   "future_labels Phi_uaf_fixed_hs_exec1 =
-     { ev0 (g_il 1), ev0 (g_il 2), ev0 (t0_il 1), ev0 (t0_il 3),
-       ev0 (t1_il 1), ev0 (t1_il 2), ev0 (t1_il 3) }"
+     { ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4), ev0 (g_il 5),
+       ev0 (t0_il 1), ev0 (t0_il 3), ev0 (t1_il 1), ev0 (t1_il 2) }"
   by (auto simp: Phi_uaf_fixed_hs_exec1_def \<Phi>_uaf_bug_fixed_exec1_def
                  future_labels_def ev0_eq_iff)
 
 text \<open>The free is the free only in the enriched exec1 (exec0 carries no free).\<close>
 lemma free_not_in_fixed_hs_exec0:
   "ev0 (t0_il 3) \<notin> future_labels Phi_uaf_fixed_hs_exec0"
-  by (auto simp: Phi_uaf_fixed_hs_exec0_def \<Phi>_uaf_bug_fixed_exec0_def
+  by (simp add: Phi_uaf_fixed_hs_exec0_def \<Phi>_uaf_bug_fixed_exec0_def
                  future_labels_def ev0_eq_iff)
 
 lemma free_only_in_fixed_hs_exec1:
@@ -810,13 +856,13 @@ proof -
 qed
 
 text \<open>The crux dependence chain, read off the edge set of the enriched exec1:
-  the free's predecessor @{text "t0.1#0"}, the read's predecessor @{text "t1.3#0"}
-  (the handshake edge), and the release's predecessor @{text "t1.2#0"} (the deref,
+  the free's predecessor @{text "t0.1#0"}, the read's predecessor @{text "t1.2#0"}
+  (the handshake edge), and the release's predecessor @{text "t1.1#0"} (the deref,
   via the already-present ppo edge).\<close>
 lemma fixed_hs_exec1_edges:
   "edge (t0_il 1) (t0_il 3) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>read  -> free\<close>
-  "edge (t1_il 3) (t0_il 1) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>release -> read (handshake)\<close>
-  "edge (t1_il 2) (t1_il 3) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>deref -> release (ppo)\<close>
+  "edge (t1_il 2) (t0_il 1) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>release -> read (handshake)\<close>
+  "edge (t1_il 1) (t1_il 2) \<in> Phi_uaf_fixed_hs_exec1"   \<comment> \<open>deref -> release (ppo)\<close>
   by (simp_all add: Phi_uaf_fixed_hs_exec1_def \<Phi>_uaf_bug_fixed_exec1_def)
 
 text \<open>HORIZON-LEVEL EXCLUSION over the enriched Phi: there is NO history at which the
@@ -848,26 +894,26 @@ proof
   from fixed_hs_exec1_edges(1) F_is
   have "(ev0 (t0_il 1), ev0 (t0_il 3)) \<in> F" by simp
   with free_preds have read_in: "ev0 (t0_il 1) \<in> hist_labels H" by blast
-  \<comment> \<open>Consistency then commits the read's predecessor -- the release @{text "t1.3#0"}.\<close>
+  \<comment> \<open>Consistency then commits the read's predecessor -- the release @{text "t1.2#0"}.\<close>
   have read_lbl: "ev0 (t0_il 1) \<in> future_labels F"
     by (simp add: F_is future_labels_fixed_hs_exec1 ev0_eq_iff)
   from F_cons read_in read_lbl
   have read_cons: "\<forall>p. (p, ev0 (t0_il 1)) \<in> F \<longrightarrow> p \<in> hist_labels H"
     by (simp add: consistent_def)
   from fixed_hs_exec1_edges(2) F_is
-  have "(ev0 (t1_il 3), ev0 (t0_il 1)) \<in> F" by simp
-  with read_cons have rel_in: "ev0 (t1_il 3) \<in> hist_labels H" by blast
-  \<comment> \<open>Consistency again commits the release's predecessor -- the DEREF @{text "t1.2#0"}.\<close>
-  have rel_lbl: "ev0 (t1_il 3) \<in> future_labels F"
+  have "(ev0 (t1_il 2), ev0 (t0_il 1)) \<in> F" by simp
+  with read_cons have rel_in: "ev0 (t1_il 2) \<in> hist_labels H" by blast
+  \<comment> \<open>Consistency again commits the release's predecessor -- the DEREF @{text "t1.1#0"}.\<close>
+  have rel_lbl: "ev0 (t1_il 2) \<in> future_labels F"
     by (simp add: F_is future_labels_fixed_hs_exec1 ev0_eq_iff)
   from F_cons rel_in rel_lbl
-  have rel_cons: "\<forall>p. (p, ev0 (t1_il 3)) \<in> F \<longrightarrow> p \<in> hist_labels H"
+  have rel_cons: "\<forall>p. (p, ev0 (t1_il 2)) \<in> F \<longrightarrow> p \<in> hist_labels H"
     by (simp add: consistent_def)
   from fixed_hs_exec1_edges(3) F_is
-  have "(ev0 (t1_il 2), ev0 (t1_il 3)) \<in> F" by simp
-  with rel_cons have deref_in: "ev0 (t1_il 2) \<in> hist_labels H" by blast
+  have "(ev0 (t1_il 1), ev0 (t1_il 2)) \<in> F" by simp
+  with rel_cons have deref_in: "ev0 (t1_il 1) \<in> hist_labels H" by blast
   \<comment> \<open>But the deref is exactly @{term fix_deref_il}, asserted PENDING -- contradiction.\<close>
-  from dp have "ev0 (t1_il 2) \<notin> hist_labels H"
+  from dp have "ev0 (t1_il 1) \<notin> hist_labels H"
     by (simp add: deref_pending_def fix_deref_il_def)
   with deref_in show False by contradiction
 qed
