@@ -194,15 +194,34 @@ definition cmd_abar ::
   "cmd_abar casok l c \<rho> = map_option fst (cmd_effect casok l c \<rho>)"
 
 
+section \<open>Thread-indexed register state\<close>
+
+text \<open>The register environment above (@{typ renv}) is ONE thread's local state.  The
+  operational configuration carries a register environment PER thread -- a map from
+  the owner @{typ owner} (@{term Init} preamble or a @{term "Thr t"}) to that
+  thread's @{typ renv}.  The executing thread of an instruction at label @{term l}
+  is its owner @{term "ilo_owner l"}; a step reads and updates ONLY that thread's
+  slice.  This is the mechanised counterpart of the paper's thread-parameterised
+  branching auxiliaries @{text "ifCond\<^sub>t"}, @{text "enterThen\<^sub>t"},
+  @{text "enterElse\<^sub>t"}: the guard is resolved against the executing thread
+  @{term t}'s registers, i.e.\ against @{term "\<rho> (ilo_owner l)"}.\<close>
+
+type_synonym renvs = "owner \<Rightarrow> renv"
+
+definition init_renvs :: renvs where
+  "init_renvs = (\<lambda>_. init_renv)"
+
+
 section \<open>Operational configuration\<close>
 
 text \<open>A configuration is the triple @{text "(sigma, rho, H)"}: the MemSem state,
-  the register environment, and the EventStruct history (an @{typ "event set"}).\<close>
+  the thread-indexed register environment @{typ renvs}, and the EventStruct history
+  (an @{typ "event set"}).\<close>
 
-type_synonym config = "mstate \<times> renv \<times> history"
+type_synonym config = "mstate \<times> renvs \<times> history"
 
 definition init_config :: config where
-  "init_config = (init_mstate, init_renv, {})"
+  "init_config = (init_mstate, init_renvs, {})"
 
 text \<open>Commit a list of labelled sub-actions to a history (the events become part of
   @{term H}).\<close>
@@ -221,8 +240,9 @@ text \<open>The inductive future-stepping relation @{text "prog, Phi \<turnstile
   (sigma',rho',H')"}.  Five rules:
 
   \<^item> @{text Step} -- a straight-line (non-branch, non-loop) command whose label is
-    enabled in @{text "horizon Phi H"} fires: resolve its effect, apply the action
-    sub-sequence to @{text sigma}, update @{text rho}, and extend @{text H} with the
+    enabled in @{text "horizon Phi H"} fires: resolve its effect against the executing
+    thread's registers @{text "rho (ilo_owner l)"}, apply the action sub-sequence to
+    @{text sigma}, update that thread's register slice, and extend @{text H} with the
     committed events.  RMWs ride this rule (their effect is several sub-actions).
   \<^item> @{text Then} -- an @{term IfElse} whose guard the path predicate admits commits
     the guard as a @{term Branch} event and proceeds into the THEN body's first
@@ -240,7 +260,9 @@ text \<open>The inductive future-stepping relation @{text "prog, Phi \<turnstile
 
   The guard event for a branch / loop carries the label @{text "l#0"} of the
   @{term IfElse} / @{term While} instruction; the horizon gate uses that
-  instruction's own label.  We thread @{term prog} only to fetch the program text.\<close>
+  instruction's own label.  We thread @{term prg} only to fetch the program text; the
+  executing thread is recovered from each label as @{term "ilo_owner l"}, and the
+  register environment @{term \<rho>} is indexed by it.\<close>
 
 inductive
   step :: "program \<Rightarrow> Phi \<Rightarrow> config \<Rightarrow> config \<Rightarrow> bool"
@@ -248,49 +270,54 @@ inductive
 where
   Step:
     \<comment> \<open>straight-line / RMW command @{term c} at label @{term l} (not @{term IfElse} /
-        @{term While}); enabled and effectful\<close>
+        @{term While}); enabled and effectful.  The executing thread is
+        @{term "ilo_owner l"}; only its register slice @{term "\<rho> (ilo_owner l)"} is
+        read and updated.\<close>
     "\<lbrakk> (l is c) \<in> set prg;
-       \<forall>b t f. c \<noteq> IfElse b t f;  \<forall>lp b body. c \<noteq> While lp b body;
-       cmd_effect casok l c \<rho> = Some (abar, las, \<rho>');
+       \<forall>b tb fb. c \<noteq> IfElse b tb fb;  \<forall>lp b body. c \<noteq> While lp b body;
+       cmd_effect casok l c (\<rho> (ilo_owner l)) = Some (abar, las, \<rho>t');
        in_horizon (horizon_label l) abar Phi H;
        \<sigma>' = apply_actions las \<sigma>;
        H' = commit_events las H \<rbrakk>
-     \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>', H')"
+     \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>(ilo_owner l := \<rho>t'), H')"
 | Then:
-    \<comment> \<open>@{term IfElse} guard taken (THEN branch): commit @{term "Branch (subst_expr \<rho> b)"}\<close>
-    "\<lbrakk> (l is IfElse b t f) \<in> set prg;
-       gact = Branch (subst_expr \<rho> b);
+    \<comment> \<open>@{term IfElse} guard taken (THEN branch): commit the guard, resolved against the
+        executing thread's registers @{term "\<rho> (ilo_owner l)"} (the paper's
+        @{text "ifCond\<^sub>t"}).  Registers are unchanged by a branch.\<close>
+    "\<lbrakk> (l is IfElse b tb fb) \<in> set prg;
+       gact = Branch (subst_expr (\<rho> (ilo_owner l)) b);
        in_horizon (horizon_label l) [gact] Phi H;
-       holds (SOME e. e \<in> phi \<sigma>) (subst_expr \<rho> b);
+       holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
        \<sigma>' = apply_action (sub l 0) gact \<sigma>;
        H' = commit_events [(sub l 0, gact)] H \<rbrakk>
      \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"
 | Else:
-    \<comment> \<open>@{term IfElse} guard not taken (ELSE branch): commit the negated guard\<close>
-    "\<lbrakk> (l is IfElse b t f) \<in> set prg;
-       gact = Branch (ENot (subst_expr \<rho> b));
+    \<comment> \<open>@{term IfElse} guard not taken (ELSE branch): commit the negated guard,
+        resolved against @{term "\<rho> (ilo_owner l)"}.\<close>
+    "\<lbrakk> (l is IfElse b tb fb) \<in> set prg;
+       gact = Branch (ENot (subst_expr (\<rho> (ilo_owner l)) b));
        in_horizon (horizon_label l) [gact] Phi H;
-       \<not> holds (SOME e. e \<in> phi \<sigma>) (subst_expr \<rho> b);
+       \<not> holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
        \<sigma>' = apply_action (sub l 0) gact \<sigma>;
        H' = commit_events [(sub l 0, gact)] H \<rbrakk>
      \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"
 | Loop:
-    \<comment> \<open>(W8b) @{term While} guard holds (enter / iterate): commit the loop guard
-        @{term "Branch (subst_expr \<rho> b)"} at the representative window @{text "l#0"}.
-        The nested body is enabled through the horizon, not stepped here.\<close>
+    \<comment> \<open>(W8b) @{term While} guard holds (enter / iterate): commit the loop guard,
+        resolved against @{term "\<rho> (ilo_owner l)"}, at the representative window
+        @{text "l#0"}.  The nested body is enabled through the horizon, not stepped here.\<close>
     "\<lbrakk> (l is While lp b body) \<in> set prg;
-       gact = Branch (subst_expr \<rho> b);
+       gact = Branch (subst_expr (\<rho> (ilo_owner l)) b);
        in_horizon (horizon_label l) [gact] Phi H;
-       holds (SOME e. e \<in> phi \<sigma>) (subst_expr \<rho> b);
+       holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
        \<sigma>' = apply_action (sub l 0) gact \<sigma>;
        H' = commit_events [(sub l 0, gact)] H \<rbrakk>
      \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"
 | LoopExit:
     \<comment> \<open>(W8b) @{term While} guard fails (exit): commit the negated guard and leave.\<close>
     "\<lbrakk> (l is While lp b body) \<in> set prg;
-       gact = Branch (ENot (subst_expr \<rho> b));
+       gact = Branch (ENot (subst_expr (\<rho> (ilo_owner l)) b));
        in_horizon (horizon_label l) [gact] Phi H;
-       \<not> holds (SOME e. e \<in> phi \<sigma>) (subst_expr \<rho> b);
+       \<not> holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
        \<sigma>' = apply_action (sub l 0) gact \<sigma>;
        H' = commit_events [(sub l 0, gact)] H \<rbrakk>
      \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"

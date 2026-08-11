@@ -301,18 +301,18 @@ proof -
   proof -
     let ?c = "Malloc vrcu (EInt 1)"
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 1) ?c init_renv = Some (abar, las, \<rho>')"
-      and abar: "abar = [AllocA (fresh init_renv) (EInt 1)]"
-      and las: "las = [(sub (g_il 1) 0, AllocA (fresh init_renv) (EInt 1))]"
+      ce: "cmd_effect False (g_il 1) ?c (init_renvs (ilo_owner (g_il 1))) = Some (abar, las, \<rho>')"
+      and abar: "abar = [AllocA (fresh (init_renvs (ilo_owner (g_il 1)))) (EInt 1)]"
+      and las: "las = [(sub (g_il 1) 0, AllocA (fresh (init_renvs (ilo_owner (g_il 1)))) (EInt 1))]"
       by (auto simp: next_sym_def Let_def split: prod.splits)
     have inh: "in_horizon (horizon_label (g_il 1)) abar Phi_RCU_pre {}"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using g1_in_horizon[of "{}"] by (simp add: hist_labels_def)
     have mem: "(g_il 1 is ?c) \<in> set prog_RCU" by (rule prog_RCU_init_mem)
-    let ?st = "(apply_actions las init_mstate, \<rho>', commit_events las {})"
+    let ?st = "(apply_actions las init_mstate, init_renvs (ilo_owner (g_il 1) := \<rho>'), commit_events las {})"
     have stp: "step prog_RCU Phi_RCU_pre init_config ?st"
       unfolding init_config_def
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=init_renvs, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las {}) = { ev0 (g_il 1) }"
       by (simp add: las hist_labels_commit_single ev0_def)
     with stp show thesis using that by blast
@@ -325,9 +325,9 @@ proof -
     and h2: "hist_labels H2 = { ev0 (g_il 1), ev0 (g_il 2) }"
   proof -
     let ?c = "WritePtr Rlx (EReg vrcu) (EInt 0)"
-    define act where "act = Write Rlx (rg \<rho>1 vrcu) (EInt 0)"
+    define act where "act = Write Rlx (rg (\<rho>1 (ilo_owner (g_il 2))) vrcu) (EInt 0)"
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 2) ?c \<rho>1 = Some (abar, las, \<rho>')"
+      ce: "cmd_effect False (g_il 2) ?c (\<rho>1 (ilo_owner (g_il 2))) = Some (abar, las, \<rho>')"
       and abar: "abar = [act]"
       and las: "las = [(sub (g_il 2) 0, act)]"
       by (auto simp: act_def Let_def)
@@ -335,9 +335,9 @@ proof -
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using g2_in_horizon[OF h1] by simp
     have mem: "(g_il 2 is ?c) \<in> set prog_RCU" by (rule prog_RCU_init_mem)
-    let ?st = "(apply_actions las \<sigma>1, \<rho>', commit_events las H1)"
+    let ?st = "(apply_actions las \<sigma>1, \<rho>1 (ilo_owner (g_il 2) := \<rho>'), commit_events las H1)"
     have stp: "step prog_RCU Phi_RCU_pre (\<sigma>1, \<rho>1, H1) ?st"
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=\<rho>1, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H1) = { ev0 (g_il 1), ev0 (g_il 2) }"
       by (auto simp: las hist_labels_commit_single h1 ev0_def)
     with stp show thesis using that by blast

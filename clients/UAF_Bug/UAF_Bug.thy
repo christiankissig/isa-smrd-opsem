@@ -468,19 +468,19 @@ proof -
     and h1: "hist_labels H1 = L1"
   proof -
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 1) (Malloc vC (EInt 1)) init_renv = Some (abar, las, \<rho>')"
-      and abar: "abar = [AllocA (fresh init_renv) (EInt 1)]"
-      and las: "las = [(sub (g_il 1) 0, AllocA (fresh init_renv) (EInt 1))]"
+      ce: "cmd_effect False (g_il 1) (Malloc vC (EInt 1)) (init_renvs (ilo_owner (g_il 1))) = Some (abar, las, \<rho>')"
+      and abar: "abar = [AllocA (fresh (init_renvs (ilo_owner (g_il 1)))) (EInt 1)]"
+      and las: "las = [(sub (g_il 1) 0, AllocA (fresh (init_renvs (ilo_owner (g_il 1)))) (EInt 1))]"
       by (auto simp: next_sym_def Let_def split: prod.splits)
     have inh: "in_horizon (horizon_label (g_il 1)) abar Phi_uaf {}"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(1)[of "{}"] by (simp add: hist_labels_def)
     have mem: "(g_il 1 is Malloc vC (EInt 1)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las init_mstate, \<rho>', commit_events las {})"
+    let ?st = "(apply_actions las init_mstate, init_renvs (ilo_owner (g_il 1) := \<rho>'), commit_events las {})"
     have stp: "step prog_uaf_bug Phi_uaf init_config ?st"
       unfolding init_config_def
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=init_renvs, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las {}) = L1"
       by (simp add: las hist_labels_commit_single ev0_def)
     with stp show thesis using that by blast
@@ -493,9 +493,9 @@ proof -
     s2: "step prog_uaf_bug Phi_uaf (\<sigma>1, \<rho>1, H1) (\<sigma>2, \<rho>2, H2)"
     and h2: "hist_labels H2 = L2"
   proof -
-    define act where "act = Write Rlx (resolve_loc \<rho>1 (EReg vC)) (subst_expr \<rho>1 (EInt 0))"
+    define act where "act = Write Rlx (resolve_loc (\<rho>1 (ilo_owner (g_il 2))) (EReg vC)) (subst_expr (\<rho>1 (ilo_owner (g_il 2))) (EInt 0))"
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 2) (WritePtr Rlx (EReg vC) (EInt 0)) \<rho>1 = Some (abar, las, \<rho>')"
+      ce: "cmd_effect False (g_il 2) (WritePtr Rlx (EReg vC) (EInt 0)) (\<rho>1 (ilo_owner (g_il 2))) = Some (abar, las, \<rho>')"
       and abar: "abar = [act]"
       and las: "las = [(sub (g_il 2) 0, act)]"
       by (auto simp: act_def Let_def)
@@ -504,9 +504,9 @@ proof -
       using horizon_lbls_chain(2)[OF h1] by simp
     have mem: "(g_il 2 is WritePtr Rlx (EReg vC) (EInt 0)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>1, \<rho>', commit_events las H1)"
+    let ?st = "(apply_actions las \<sigma>1, \<rho>1 (ilo_owner (g_il 2) := \<rho>'), commit_events las H1)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>1, \<rho>1, H1) ?st"
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=\<rho>1, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H1) = L2"
       by (auto simp: las hist_labels_commit_single h1 ev0_def)
     with stp show thesis using that by blast
@@ -519,18 +519,18 @@ proof -
     and h3: "hist_labels H3 = L3"
   proof -
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 3) (Malloc vrcu (EInt 1)) \<rho>2 = Some (abar, las, \<rho>')"
-      and abar: "abar = [AllocA (fresh \<rho>2) (EInt 1)]"
-      and las: "las = [(sub (g_il 3) 0, AllocA (fresh \<rho>2) (EInt 1))]"
+      ce: "cmd_effect False (g_il 3) (Malloc vrcu (EInt 1)) (\<rho>2 (ilo_owner (g_il 3))) = Some (abar, las, \<rho>')"
+      and abar: "abar = [AllocA (fresh (\<rho>2 (ilo_owner (g_il 3)))) (EInt 1)]"
+      and las: "las = [(sub (g_il 3) 0, AllocA (fresh (\<rho>2 (ilo_owner (g_il 3)))) (EInt 1))]"
       by (auto simp: next_sym_def Let_def split: prod.splits)
     have inh: "in_horizon (horizon_label (g_il 3)) abar Phi_uaf H2"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(3)[OF h2] by simp
     have mem: "(g_il 3 is Malloc vrcu (EInt 1)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>2, \<rho>', commit_events las H2)"
+    let ?st = "(apply_actions las \<sigma>2, \<rho>2 (ilo_owner (g_il 3) := \<rho>'), commit_events las H2)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>2, \<rho>2, H2) ?st"
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=\<rho>2, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H2) = L3"
       by (auto simp: las hist_labels_commit_single h2 ev0_def)
     with stp show thesis using that by blast
@@ -542,9 +542,9 @@ proof -
     s4: "step prog_uaf_bug Phi_uaf (\<sigma>3, \<rho>3, H3) (\<sigma>4, \<rho>4, H4)"
     and h4: "hist_labels H4 = L4"
   proof -
-    define act where "act = Write Rlx (resolve_loc \<rho>3 (EReg vrcu)) (subst_expr \<rho>3 (EInt 1))"
+    define act where "act = Write Rlx (resolve_loc (\<rho>3 (ilo_owner (g_il 4))) (EReg vrcu)) (subst_expr (\<rho>3 (ilo_owner (g_il 4))) (EInt 1))"
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 4) (WritePtr Rlx (EReg vrcu) (EInt 1)) \<rho>3 = Some (abar, las, \<rho>')"
+      ce: "cmd_effect False (g_il 4) (WritePtr Rlx (EReg vrcu) (EInt 1)) (\<rho>3 (ilo_owner (g_il 4))) = Some (abar, las, \<rho>')"
       and abar: "abar = [act]"
       and las: "las = [(sub (g_il 4) 0, act)]"
       by (auto simp: act_def Let_def)
@@ -553,9 +553,9 @@ proof -
       using horizon_lbls_chain(4)[OF h3] by simp
     have mem: "(g_il 4 is WritePtr Rlx (EReg vrcu) (EInt 1)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>3, \<rho>', commit_events las H3)"
+    let ?st = "(apply_actions las \<sigma>3, \<rho>3 (ilo_owner (g_il 4) := \<rho>'), commit_events las H3)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>3, \<rho>3, H3) ?st"
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=\<rho>3, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H3) = L4"
       by (auto simp: las hist_labels_commit_single h3 ev0_def)
     with stp show thesis using that by blast
@@ -568,7 +568,7 @@ proof -
     and h5: "hist_labels H5 = L5"
   proof -
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (g_il 5) (CFence Acq_rel) \<rho>4 = Some (abar, las, \<rho>')"
+      ce: "cmd_effect False (g_il 5) (CFence Acq_rel) (\<rho>4 (ilo_owner (g_il 5))) = Some (abar, las, \<rho>')"
       and abar: "abar = [Fence Acq_rel]"
       and las: "las = [(sub (g_il 5) 0, Fence Acq_rel)]"
       by (auto simp: Let_def)
@@ -577,9 +577,9 @@ proof -
       using horizon_lbls_chain(5)[OF h4] by simp
     have mem: "(g_il 5 is CFence Acq_rel) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>4, \<rho>', commit_events las H4)"
+    let ?st = "(apply_actions las \<sigma>4, \<rho>4 (ilo_owner (g_il 5) := \<rho>'), commit_events las H4)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>4, \<rho>4, H4) ?st"
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=\<rho>4, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H4) = L5"
       by (auto simp: las hist_labels_commit_single h4 ev0_def)
     with stp show thesis using that by blast
@@ -593,18 +593,18 @@ proof -
                                 ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
   proof -
     obtain abar las \<rho>' where
-      ce: "cmd_effect False (t0_il 1) (ReadPtr Rlx rtemp (EReg vrcu)) \<rho>5 = Some (abar, las, \<rho>')"
-      and abar: "abar = [Read Rlx (resolve_loc \<rho>5 (EReg vrcu)) (fresh \<rho>5)]"
-      and las: "las = [(sub (t0_il 1) 0, Read Rlx (resolve_loc \<rho>5 (EReg vrcu)) (fresh \<rho>5))]"
+      ce: "cmd_effect False (t0_il 1) (ReadPtr Rlx rtemp (EReg vrcu)) (\<rho>5 (ilo_owner (t0_il 1))) = Some (abar, las, \<rho>')"
+      and abar: "abar = [Read Rlx (resolve_loc (\<rho>5 (ilo_owner (t0_il 1))) (EReg vrcu)) (fresh (\<rho>5 (ilo_owner (t0_il 1))))]"
+      and las: "las = [(sub (t0_il 1) 0, Read Rlx (resolve_loc (\<rho>5 (ilo_owner (t0_il 1))) (EReg vrcu)) (fresh (\<rho>5 (ilo_owner (t0_il 1)))))]"
       by (auto simp: next_sym_def Let_def split: prod.splits)
     have inh: "in_horizon (horizon_label (t0_il 1)) abar Phi_uaf H5"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(6)[OF h5] by simp
     have mem: "(t0_il 1 is ReadPtr Rlx rtemp (EReg vrcu)) \<in> set prog_uaf_bug"
       by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>5, \<rho>', commit_events las H5)"
+    let ?st = "(apply_actions las \<sigma>5, \<rho>5 (ilo_owner (t0_il 1) := \<rho>'), commit_events las H5)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>5, \<rho>5, H5) ?st"
-      by (rule step.Step[OF mem _ _ ce inh refl refl]) auto
+      by (rule step.Step[where \<rho>=\<rho>5, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H5) =
             {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4), ev0 (g_il 5),
              ev0 (t0_il 1)}"
