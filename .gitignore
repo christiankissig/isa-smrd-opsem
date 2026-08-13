@@ -2,6 +2,7 @@
 .*.marks
 \#*\#
 *~
+*.thy.tmp.*
 *.log
 *.pdf
 *.aux
