@@ -5,10 +5,10 @@
     Episodic OpSem stack.  Reproduces the headline result `tab-fut-step-bug` /
     `-fix`: the UAF is REACHABLE in the buggy program and EXCLUDED in the fixed one.
 
-    Structural source of truth: the mordor-rendered digest + Phi.  Here everything
+    Structural source of truth: the generated program + Phi.  Here everything
     is in the REAL Core / EventStruct / MemSem / OpSem types, session-qualified.
 
-    The two source programs (mordor `.lit`) are now IDENTICAL except for the exit
+    The two source programs are now IDENTICAL except for the exit
     write's memory order (relaxed in the bug, release in the fixed):
 
       uaf-bug.lit                          uaf-bug-fixed.lit
@@ -41,9 +41,9 @@ begin
 
 section \<open>Owners, labels, and the label-encoding helpers\<close>
 
-text \<open>The two worker threads are @{term "Thr 0"} (the reclaimer, mordor @{text t0})
-  and @{term "Thr 1"} (the reader, mordor @{text t1}); the init preamble is
-  @{term Init} (mordor @{text g}).  The label-encoding helpers @{term il} / @{term ev0}
+text \<open>The two worker threads are @{term "Thr 0"} (the reclaimer, @{text t0})
+  and @{term "Thr 1"} (the reader, @{text t1}); the init preamble is
+  @{term Init} (@{text g}).  The label-encoding helpers @{term il} / @{term ev0}
   / @{term edge} live in @{text UAF_Labels} (imported above), shared with the
   GENERATED future set @{text UAF_Phi_fixed_gen}.\<close>
 
@@ -57,9 +57,9 @@ abbreviation "rv    \<equiv> ''rv''"      \<comment> \<open>t1 local: the deref 
 
 section \<open>The buggy program @{text prog_uaf_bug} (Core-typed labelled commands)\<close>
 
-text \<open>Faithful to the generated @{text "Prog_uaf_bug"} digest, retyped into Core's
+text \<open>Faithful to the generated @{text "Prog_uaf_bug"} program, retyped into Core's
   @{typ command} / @{typ instr}.  The free of @{text rC} sits inside the
-  @{term IfElse} body (rolled), as in mordor; the digest is the flat instruction
+  @{term IfElse} body (nested), as in the source; the top-level program is the flat instruction
   list (the @{type owner} in each @{typ iloc} separates init / t0 / t1).\<close>
 
 definition prog_uaf_bug :: program where
@@ -80,6 +80,13 @@ definition prog_uaf_bug :: program where
      t1_il 2 is WritePtr Rlx (EReg vrcu) (EInt 0)
    ]"
 
+text \<open>OpSem's step rules address instructions in the FLATTENED program
+  @{term "instrs prog_uaf_bug"} (so that the free nested in @{text "t0.2"}'s THEN body
+  is reachable at all).  For the top-level instructions that is no extra work:
+  flattening only adds entries.\<close>
+lemma instrs_prog_uaf_bugI: "i \<in> set prog_uaf_bug \<Longrightarrow> i \<in> set (instrs prog_uaf_bug)"
+  using set_prog_subset_instrs by blast
+
 text \<open>The labels the UAF argument turns on, in the BUG program.\<close>
 definition bug_free_il   :: iloc where "bug_free_il   = t0_il 3"   \<comment> \<open>@{text "free rC"}\<close>
 definition bug_deref_il  :: iloc where "bug_deref_il  = t1_il 1"   \<comment> \<open>@{text "R rC"} (deref)\<close>
@@ -88,7 +95,7 @@ definition bug_exit_il   :: iloc where "bug_exit_il   = t1_il 2"   \<comment> \<
 
 section \<open>The fixed program @{text prog_uaf_fixed}\<close>
 
-text \<open>Faithful to the generated @{text "Prog_uaf_bug_fixed"} digest.  The fixed program
+text \<open>Faithful to the generated @{text "Prog_uaf_bug_fixed"} program.  The fixed program
   is now IDENTICAL to @{term prog_uaf_bug} except for the reader's exit write: it lowers
   rcu with a RELEASE write (@{text "t1.2"}, @{term Rel}) rather than a relaxed one.  That
   release is the only change w.r.t. the bug at the action level; at the @{typ Phi} level
@@ -125,7 +132,7 @@ section \<open>The future sets @{text Phi_uaf} / @{text Phi_uaf_fixed} (EventStr
 
 text \<open>Each execution's edge-set is rendered over @{typ elabel} via @{term ev0}
   (every event here is a single leading sub-event @{text "#0"}).  These are the
-  mordor-rendered edge-sets of the generated bug / fixed digests, retyped.  The
+  generated edge-sets of the bug / fixed programs, retyped.  The
   @{term edge} abbreviation lives in @{text UAF_Labels}.\<close>
 
 subsection \<open>@{text Phi_uaf} (the bug)\<close>
@@ -171,7 +178,7 @@ definition Phi_uaf :: Phi where
 
 subsection \<open>@{text Phi_uaf_fixed} (the fix)\<close>
 
-text \<open>This is the PROVISIONAL, single-program mordor render (the un-enriched futures of
+text \<open>This is the PROVISIONAL, single-program render (the un-enriched futures of
   @{text "uaf-bug-fixed"}): exec0 has no free; exec1 is the one containing @{text "free
   rC"} (@{text "t0.3#0"}).  In BOTH, the deref->exit edge @{text "t1.1#0 -> t1.2#0"} is
   PRESENT (the release exit's ppo predecessor) -- the discriminator absent in the bug.
@@ -212,7 +219,7 @@ definition Phi_uaf_fixed :: Phi where
 subsection \<open>@{text Phi_uaf_fixed_hs} -- the fix Phi ENRICHED with the cross-thread
   handshake DP edge (now GENERATED, not hand-asserted)\<close>
 
-text \<open>The provisional, single-program mordor render @{term Phi_uaf_fixed} omits the
+text \<open>The provisional, single-program render @{term Phi_uaf_fixed} omits the
   cross-thread synchronizes-with / DP dependence the release/acquire RCU handshake
   creates between the reader and the reclaimer (see the HONESTY NOTE below and the
   machine-checked counter-fact @{text uaf_config_fixed_horizon_counterexample}).
@@ -231,7 +238,7 @@ text \<open>The provisional, single-program mordor render @{term Phi_uaf_fixed} 
   This edge is now DERIVED, not hand-asserted: @{term \<Phi>_uaf_bug_fixed} (in the
   generated theory @{text UAF_Phi_fixed_gen}) is rendered by @{text
   "scripts/generate_phi.py --core --executions"}, which adds the handshake edge from
-  mordor's per-execution reads-from relation (release-class writer).  For this program
+  the per-execution reads-from relation (release-class writer).  For this program
   the reader's release @{text "t1.2#0"} reads-to the reclaimer's read in BOTH
   executions, so the edge is added to both @{term \<Phi>_uaf_bug_fixed_exec0} and
   @{term \<Phi>_uaf_bug_fixed_exec1}.  We take @{term Phi_uaf_fixed_hs} to BE that
@@ -374,6 +381,12 @@ abbreviation (input) "L3 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3)}"
 abbreviation (input) "L4 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4)}"
 abbreviation (input) "L5 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4),
                              ev0 (g_il 5)}"
+abbreviation (input) "L6 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4),
+                             ev0 (g_il 5), ev0 (t0_il 1)}"
+\<comment> \<open>@{text L7} is @{text L6} with the FREE committed -- the history the seventh step
+    produces, at which the deref is still enabled.\<close>
+abbreviation (input) "L7 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4),
+                             ev0 (g_il 5), ev0 (t0_il 1), ev0 (t0_il 3)}"
 
 text \<open>exec1 is consistent with each chain history (each is an exec1-downward-closed
   prefix).\<close>
@@ -384,6 +397,8 @@ lemma exec1_consistent_chain:
   "hist_labels H = L3 \<Longrightarrow> consistent Phi_uaf_exec1 H"
   "hist_labels H = L4 \<Longrightarrow> consistent Phi_uaf_exec1 H"
   "hist_labels H = L5 \<Longrightarrow> consistent Phi_uaf_exec1 H"
+  "hist_labels H = L6 \<Longrightarrow> consistent Phi_uaf_exec1 H"
+  "hist_labels H = L7 \<Longrightarrow> consistent Phi_uaf_exec1 H"
   unfolding consistent_def
   by (simp_all add: Phi_uaf_exec1_def future_labels_def ev0_eq_iff)
 
@@ -395,6 +410,12 @@ lemma exec1_enabled_chain:
   "hist_labels H = L3 \<Longrightarrow> ev0 (g_il 4) \<in> enabled_in Phi_uaf_exec1 H"
   "hist_labels H = L4 \<Longrightarrow> ev0 (g_il 5) \<in> enabled_in Phi_uaf_exec1 H"
   "hist_labels H = L5 \<Longrightarrow> ev0 (t0_il 1) \<in> enabled_in Phi_uaf_exec1 H"
+  \<comment> \<open>the FREE, enabled once the reclaimer's read is committed (its only non-init
+      exec1 predecessor)\<close>
+  "hist_labels H = L6 \<Longrightarrow> ev0 (t0_il 3) \<in> enabled_in Phi_uaf_exec1 H"
+  \<comment> \<open>and the DEREF, still enabled AFTER the free has been committed: exec1 orders
+      nothing between @{text "t0.3#0"} and @{text "t1.1#0"}\<close>
+  "hist_labels H = L7 \<Longrightarrow> ev0 (t1_il 1) \<in> enabled_in Phi_uaf_exec1 H"
   unfolding enabled_in_def
   by (simp_all add: Phi_uaf_exec1_def future_labels_def ev0_eq_iff)
 
@@ -423,9 +444,22 @@ lemma horizon_lbls_chain5: "hist_labels H = L4 \<Longrightarrow> ev0 (g_il 5) \<
 lemma horizon_lbls_chain6: "hist_labels H = L5 \<Longrightarrow> ev0 (t0_il 1) \<in> horizon_lbls Phi_uaf H"
   by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(6) exec1_enabled_chain(6)]) assumption+
 
+text \<open>The seventh step's gate: the FREE is in the global horizon once the six init /
+  reclaimer labels are committed.\<close>
+lemma horizon_lbls_chain7: "hist_labels H = L6 \<Longrightarrow> ev0 (t0_il 3) \<in> horizon_lbls Phi_uaf H"
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(7) exec1_enabled_chain(7)]) assumption+
+
+text \<open>And the point of the whole exercise: with the free COMMITTED, the deref is
+  still in the horizon -- it can be scheduled next, against a location that has
+  already been deallocated.\<close>
+lemma horizon_lbls_deref_after_free:
+  "hist_labels H = L7 \<Longrightarrow> ev0 (t1_il 1) \<in> horizon_lbls Phi_uaf H"
+  by (rule in_horizon_lblsI[OF exec1_in_Phi_uaf exec1_consistent_chain(8) exec1_enabled_chain(8)]) assumption+
+
 lemmas horizon_lbls_chain =
   horizon_lbls_chain1 horizon_lbls_chain2 horizon_lbls_chain3
   horizon_lbls_chain4 horizon_lbls_chain5 horizon_lbls_chain6
+  horizon_lbls_chain7
 
 text \<open>@{term instr_sublabel} of a @{term sub}-label at @{text 0} is itself.\<close>
 lemma instr_sublabel_ev0 [simp]: "instr_sublabel (ev0 l) 0 = ev0 l"
@@ -449,11 +483,22 @@ text \<open>Now the explicit six-step chain.  Each step is the @{term Step} rule
   in the horizon by @{thm horizon_lbls_chain}.  We track ONLY the history's label set;
   the @{term \<sigma>} / @{term \<rho>} are threaded existentially.\<close>
 
+text \<open>The two worker threads never bind the NAME @{text rC} in a register of their
+  own: only the init preamble allocates it, publishing it in the shared
+  @{term vmap}.  So both workers resolve @{text rC} through the global map -- which is
+  exactly what makes the reclaimer's free and the reader's deref name the SAME
+  location.  We track that along the chain.\<close>
+abbreviation (input) "vC_unbound \<rho> \<equiv> rg (\<rho> (Thr 0)) vC = 0 \<and> rg (\<rho> (Thr 1)) vC = 0"
+
 lemma reachable_uaf_chain:
-  "\<exists>\<sigma> \<rho> H. opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H) \<and>
-            (step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>, \<rho>, H) \<and>
-            hist_labels H = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3),
-                             ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
+  "\<exists>\<sigma> \<rho> H \<sigma>' \<rho>' H'.
+      opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H) \<and>
+      (step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>, \<rho>, H) \<and>
+      hist_labels H = L6 \<and>
+      opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>', \<rho>', H') \<and>
+      (step prog_uaf_bug Phi_uaf ^^ 7) init_config (\<sigma>', \<rho>', H') \<and>
+      hist_labels H' = L7 \<and>
+      resolve_loc (\<rho>' (Thr 1)) (EReg vC) \<notin> memory \<sigma>'"
 proof -
   define R where "R \<equiv> opsem_client.reachable prog_uaf_bug Phi_uaf"
   \<comment> \<open>helper: one @{term Step} of a single-action command, given horizon membership\<close>
@@ -466,6 +511,7 @@ proof -
   obtain \<sigma>1 \<rho>1 H1 where
     s1: "step prog_uaf_bug Phi_uaf init_config (\<sigma>1, \<rho>1, H1)"
     and h1: "hist_labels H1 = L1"
+    and wc1: "vC_unbound \<rho>1"
   proof -
     obtain abar las \<rho>' where
       ce: "cmd_effect False (g_il 1) (Malloc vC (EInt 1)) (init_renvs (ilo_owner (g_il 1))) = Some (abar, las, \<rho>')"
@@ -475,15 +521,17 @@ proof -
     have inh: "in_horizon (horizon_label (g_il 1)) abar Phi_uaf {}"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(1)[of "{}"] by (simp add: hist_labels_def)
-    have mem: "(g_il 1 is Malloc vC (EInt 1)) \<in> set prog_uaf_bug"
-      by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las init_mstate, init_renvs (ilo_owner (g_il 1) := \<rho>'), commit_events las {})"
+    have mem: "(g_il 1 is Malloc vC (EInt 1)) \<in> set (instrs prog_uaf_bug)"
+      by (rule instrs_prog_uaf_bugI) (simp add: prog_uaf_bug_def)
+    let ?st = "(apply_actions las init_mstate, publish init_renvs (ilo_owner (g_il 1)) \<rho>', commit_events las {})"
     have stp: "step prog_uaf_bug Phi_uaf init_config ?st"
       unfolding init_config_def
       by (rule step.Step[where \<rho>=init_renvs, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las {}) = L1"
       by (simp add: las hist_labels_commit_single ev0_def)
-    with stp show thesis using that by blast
+    moreover have "vC_unbound (publish init_renvs (ilo_owner (g_il 1)) \<rho>')"
+      by (simp add: rg_publish_other il_def init_renvs_def init_renv_def)
+    ultimately show thesis using stp that by blast
   qed
   have r1: "R (\<sigma>1, \<rho>1, H1)"
     unfolding R_def using r0[unfolded R_def] s1
@@ -492,6 +540,7 @@ proof -
   obtain \<sigma>2 \<rho>2 H2 where
     s2: "step prog_uaf_bug Phi_uaf (\<sigma>1, \<rho>1, H1) (\<sigma>2, \<rho>2, H2)"
     and h2: "hist_labels H2 = L2"
+    and wc2: "vC_unbound \<rho>2"
   proof -
     define act where "act = Write Rlx (resolve_loc (\<rho>1 (ilo_owner (g_il 2))) (EReg vC)) (subst_expr (\<rho>1 (ilo_owner (g_il 2))) (EInt 0))"
     obtain abar las \<rho>' where
@@ -502,14 +551,16 @@ proof -
     have inh: "in_horizon (horizon_label (g_il 2)) abar Phi_uaf H1"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(2)[OF h1] by simp
-    have mem: "(g_il 2 is WritePtr Rlx (EReg vC) (EInt 0)) \<in> set prog_uaf_bug"
-      by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>1, \<rho>1 (ilo_owner (g_il 2) := \<rho>'), commit_events las H1)"
+    have mem: "(g_il 2 is WritePtr Rlx (EReg vC) (EInt 0)) \<in> set (instrs prog_uaf_bug)"
+      by (rule instrs_prog_uaf_bugI) (simp add: prog_uaf_bug_def)
+    let ?st = "(apply_actions las \<sigma>1, publish \<rho>1 (ilo_owner (g_il 2)) \<rho>', commit_events las H1)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>1, \<rho>1, H1) ?st"
       by (rule step.Step[where \<rho>=\<rho>1, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H1) = L2"
       by (auto simp: las hist_labels_commit_single h1 ev0_def)
-    with stp show thesis using that by blast
+    moreover have "vC_unbound (publish \<rho>1 (ilo_owner (g_il 2)) \<rho>')"
+      using wc1 by (simp add: rg_publish_other il_def)
+    ultimately show thesis using stp that by blast
   qed
   have r2: "R (\<sigma>2, \<rho>2, H2)"
     unfolding R_def using r1[unfolded R_def] s2 by (rule opsem_client.reachable_step)
@@ -517,6 +568,7 @@ proof -
   obtain \<sigma>3 \<rho>3 H3 where
     s3: "step prog_uaf_bug Phi_uaf (\<sigma>2, \<rho>2, H2) (\<sigma>3, \<rho>3, H3)"
     and h3: "hist_labels H3 = L3"
+    and wc3: "vC_unbound \<rho>3"
   proof -
     obtain abar las \<rho>' where
       ce: "cmd_effect False (g_il 3) (Malloc vrcu (EInt 1)) (\<rho>2 (ilo_owner (g_il 3))) = Some (abar, las, \<rho>')"
@@ -526,14 +578,16 @@ proof -
     have inh: "in_horizon (horizon_label (g_il 3)) abar Phi_uaf H2"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(3)[OF h2] by simp
-    have mem: "(g_il 3 is Malloc vrcu (EInt 1)) \<in> set prog_uaf_bug"
-      by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>2, \<rho>2 (ilo_owner (g_il 3) := \<rho>'), commit_events las H2)"
+    have mem: "(g_il 3 is Malloc vrcu (EInt 1)) \<in> set (instrs prog_uaf_bug)"
+      by (rule instrs_prog_uaf_bugI) (simp add: prog_uaf_bug_def)
+    let ?st = "(apply_actions las \<sigma>2, publish \<rho>2 (ilo_owner (g_il 3)) \<rho>', commit_events las H2)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>2, \<rho>2, H2) ?st"
       by (rule step.Step[where \<rho>=\<rho>2, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H2) = L3"
       by (auto simp: las hist_labels_commit_single h2 ev0_def)
-    with stp show thesis using that by blast
+    moreover have "vC_unbound (publish \<rho>2 (ilo_owner (g_il 3)) \<rho>')"
+      using wc2 by (simp add: rg_publish_other il_def)
+    ultimately show thesis using stp that by blast
   qed
   have r3: "R (\<sigma>3, \<rho>3, H3)"
     unfolding R_def using r2[unfolded R_def] s3 by (rule opsem_client.reachable_step)
@@ -541,6 +595,7 @@ proof -
   obtain \<sigma>4 \<rho>4 H4 where
     s4: "step prog_uaf_bug Phi_uaf (\<sigma>3, \<rho>3, H3) (\<sigma>4, \<rho>4, H4)"
     and h4: "hist_labels H4 = L4"
+    and wc4: "vC_unbound \<rho>4"
   proof -
     define act where "act = Write Rlx (resolve_loc (\<rho>3 (ilo_owner (g_il 4))) (EReg vrcu)) (subst_expr (\<rho>3 (ilo_owner (g_il 4))) (EInt 1))"
     obtain abar las \<rho>' where
@@ -551,14 +606,16 @@ proof -
     have inh: "in_horizon (horizon_label (g_il 4)) abar Phi_uaf H3"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(4)[OF h3] by simp
-    have mem: "(g_il 4 is WritePtr Rlx (EReg vrcu) (EInt 1)) \<in> set prog_uaf_bug"
-      by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>3, \<rho>3 (ilo_owner (g_il 4) := \<rho>'), commit_events las H3)"
+    have mem: "(g_il 4 is WritePtr Rlx (EReg vrcu) (EInt 1)) \<in> set (instrs prog_uaf_bug)"
+      by (rule instrs_prog_uaf_bugI) (simp add: prog_uaf_bug_def)
+    let ?st = "(apply_actions las \<sigma>3, publish \<rho>3 (ilo_owner (g_il 4)) \<rho>', commit_events las H3)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>3, \<rho>3, H3) ?st"
       by (rule step.Step[where \<rho>=\<rho>3, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H3) = L4"
       by (auto simp: las hist_labels_commit_single h3 ev0_def)
-    with stp show thesis using that by blast
+    moreover have "vC_unbound (publish \<rho>3 (ilo_owner (g_il 4)) \<rho>')"
+      using wc3 by (simp add: rg_publish_other il_def)
+    ultimately show thesis using stp that by blast
   qed
   have r4: "R (\<sigma>4, \<rho>4, H4)"
     unfolding R_def using r3[unfolded R_def] s4 by (rule opsem_client.reachable_step)
@@ -566,6 +623,7 @@ proof -
   obtain \<sigma>5 \<rho>5 H5 where
     s5: "step prog_uaf_bug Phi_uaf (\<sigma>4, \<rho>4, H4) (\<sigma>5, \<rho>5, H5)"
     and h5: "hist_labels H5 = L5"
+    and wc5: "vC_unbound \<rho>5"
   proof -
     obtain abar las \<rho>' where
       ce: "cmd_effect False (g_il 5) (CFence Acq_rel) (\<rho>4 (ilo_owner (g_il 5))) = Some (abar, las, \<rho>')"
@@ -575,14 +633,16 @@ proof -
     have inh: "in_horizon (horizon_label (g_il 5)) abar Phi_uaf H4"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(5)[OF h4] by simp
-    have mem: "(g_il 5 is CFence Acq_rel) \<in> set prog_uaf_bug"
-      by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>4, \<rho>4 (ilo_owner (g_il 5) := \<rho>'), commit_events las H4)"
+    have mem: "(g_il 5 is CFence Acq_rel) \<in> set (instrs prog_uaf_bug)"
+      by (rule instrs_prog_uaf_bugI) (simp add: prog_uaf_bug_def)
+    let ?st = "(apply_actions las \<sigma>4, publish \<rho>4 (ilo_owner (g_il 5)) \<rho>', commit_events las H4)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>4, \<rho>4, H4) ?st"
       by (rule step.Step[where \<rho>=\<rho>4, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H4) = L5"
       by (auto simp: las hist_labels_commit_single h4 ev0_def)
-    with stp show thesis using that by blast
+    moreover have "vC_unbound (publish \<rho>4 (ilo_owner (g_il 5)) \<rho>')"
+      using wc4 by (simp add: rg_publish_other il_def)
+    ultimately show thesis using stp that by blast
   qed
   have r5: "R (\<sigma>5, \<rho>5, H5)"
     unfolding R_def using r4[unfolded R_def] s5 by (rule opsem_client.reachable_step)
@@ -591,28 +651,80 @@ proof -
     s6: "step prog_uaf_bug Phi_uaf (\<sigma>5, \<rho>5, H5) (\<sigma>6, \<rho>6, H6)"
     and h6: "hist_labels H6 = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3),
                                 ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
+    and wc6: "vC_unbound \<rho>6"
   proof -
     obtain abar las \<rho>' where
       ce: "cmd_effect False (t0_il 1) (ReadPtr Rlx rtemp (EReg vrcu)) (\<rho>5 (ilo_owner (t0_il 1))) = Some (abar, las, \<rho>')"
       and abar: "abar = [Read Rlx (resolve_loc (\<rho>5 (ilo_owner (t0_il 1))) (EReg vrcu)) (fresh (\<rho>5 (ilo_owner (t0_il 1))))]"
       and las: "las = [(sub (t0_il 1) 0, Read Rlx (resolve_loc (\<rho>5 (ilo_owner (t0_il 1))) (EReg vrcu)) (fresh (\<rho>5 (ilo_owner (t0_il 1)))))]"
+      \<comment> \<open>the read binds the thread-local @{text rtemp}; it leaves @{text rC} unbound
+          in the reclaimer's registers, so @{text rC} still resolves globally\<close>
+      and rho': "\<rho>' = set_reg (snd (next_sym (\<rho>5 (ilo_owner (t0_il 1))))) rtemp
+                              (fresh (\<rho>5 (ilo_owner (t0_il 1))))"
       by (auto simp: next_sym_def Let_def split: prod.splits)
     have inh: "in_horizon (horizon_label (t0_il 1)) abar Phi_uaf H5"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using horizon_lbls_chain(6)[OF h5] by simp
-    have mem: "(t0_il 1 is ReadPtr Rlx rtemp (EReg vrcu)) \<in> set prog_uaf_bug"
-      by (simp add: prog_uaf_bug_def)
-    let ?st = "(apply_actions las \<sigma>5, \<rho>5 (ilo_owner (t0_il 1) := \<rho>'), commit_events las H5)"
+    have mem: "(t0_il 1 is ReadPtr Rlx rtemp (EReg vrcu)) \<in> set (instrs prog_uaf_bug)"
+      by (rule instrs_prog_uaf_bugI) (simp add: prog_uaf_bug_def)
+    let ?st = "(apply_actions las \<sigma>5, publish \<rho>5 (ilo_owner (t0_il 1)) \<rho>', commit_events las H5)"
     have stp: "step prog_uaf_bug Phi_uaf (\<sigma>5, \<rho>5, H5) ?st"
       by (rule step.Step[where \<rho>=\<rho>5, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H5) =
             {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4), ev0 (g_il 5),
              ev0 (t0_il 1)}"
       by (auto simp: las hist_labels_commit_single h5 ev0_def)
-    with stp show thesis using that by blast
+    moreover have "vC_unbound (publish \<rho>5 (ilo_owner (t0_il 1)) \<rho>')"
+      using wc5 rho' by (simp add: rg_publish_other il_def set_reg_def next_sym_def)
+    ultimately show thesis using stp that by blast
   qed
   have r6: "R (\<sigma>6, \<rho>6, H6)"
     unfolding R_def using r5[unfolded R_def] s6 by (rule opsem_client.reachable_step)
+  \<comment> \<open>step 6: commit t0.3 (Free rC) -- the instruction NESTED in @{text "t0.2"}'s THEN
+      body.  It is addressed through the FLATTENED program @{term "instrs prog_uaf_bug"};
+      no branch event is committed (Phi carries none), the horizon gate alone admits
+      it, via exec1's control-dependence edge @{text "t0.1#0 \<rightarrow> t0.3#0"}.\<close>
+  obtain \<sigma>7 \<rho>7 H7 where
+    s7: "step prog_uaf_bug Phi_uaf (\<sigma>6, \<rho>6, H6) (\<sigma>7, \<rho>7, H7)"
+    and h7: "hist_labels H7 = L7"
+    \<comment> \<open>the MEMORY-STATE consequence: the location the reader will dereference is
+        no longer allocated\<close>
+    and freed7: "resolve_loc (\<rho>7 (Thr 1)) (EReg vC) \<notin> memory \<sigma>7"
+  proof -
+    obtain abar las \<rho>' where
+      ce: "cmd_effect False (t0_il 3) (Free vC) (\<rho>6 (ilo_owner (t0_il 3))) = Some (abar, las, \<rho>')"
+      and abar: "abar = [DeallocA (sym_of (\<rho>6 (ilo_owner (t0_il 3))) vC)]"
+      and las: "las = [(sub (t0_il 3) 0, DeallocA (sym_of (\<rho>6 (ilo_owner (t0_il 3))) vC))]"
+      by (auto simp: Let_def)
+    have inh: "in_horizon (horizon_label (t0_il 3)) abar Phi_uaf H6"
+      unfolding in_horizon_def horizon_label_eq_ev0 abar
+      using horizon_lbls_chain(7)[OF h6] by simp
+    have mem: "(t0_il 3 is Free vC) \<in> set (instrs prog_uaf_bug)"
+      \<comment> \<open>NOT a member of @{term "set prog_uaf_bug"} -- it is reachable only through
+          the flattening\<close>
+      by (simp add: prog_uaf_bug_def is_entry_def)
+    let ?st = "(apply_actions las \<sigma>6, publish \<rho>6 (ilo_owner (t0_il 3)) \<rho>', commit_events las H6)"
+    have stp: "step prog_uaf_bug Phi_uaf (\<sigma>6, \<rho>6, H6) ?st"
+      by (rule step.Step[where \<rho>=\<rho>6, OF mem _ _ ce inh refl refl]) auto
+    have hl: "hist_labels (commit_events las H6) = L7"
+      by (auto simp: las hist_labels_commit_single h6 ev0_def)
+    \<comment> \<open>@{term Free} leaves the registers alone, so the write-back only broadcasts the
+        shared components; the reader therefore resolves @{text rC} to the very symbol
+        the reclaimer just deallocated -- both go through the shared @{term vmap},
+        neither has @{text rC} in its own registers (@{thm wc6}).\<close>
+    have rho'_eq: "\<rho>' = \<rho>6 (ilo_owner (t0_il 3))" using ce by (simp add: Let_def)
+    have same: "resolve_loc (publish \<rho>6 (ilo_owner (t0_il 3)) \<rho>' (Thr 1)) (EReg vC)
+                  = sym_of (\<rho>6 (ilo_owner (t0_il 3))) vC"
+      using wc6 by (simp add: publish_def rho'_eq sym_of_def il_def)
+    have gone: "sym_of (\<rho>6 (ilo_owner (t0_il 3))) vC \<notin> memory (apply_actions las \<sigma>6)"
+      by (simp add: las)
+    from same gone
+    have "resolve_loc (publish \<rho>6 (ilo_owner (t0_il 3)) \<rho>' (Thr 1)) (EReg vC)
+            \<notin> memory (apply_actions las \<sigma>6)" by simp
+    with stp hl show thesis using that by blast
+  qed
+  have r7: "R (\<sigma>7, \<rho>7, H7)"
+    unfolding R_def using r6[unfolded R_def] s7 by (rule opsem_client.reachable_step)
   \<comment> \<open>The SAME chain, counted: exactly six @{term step} applications reach the UAF
       config, as a machine-checked relation-power fact @{text "step ^^ 6"}.\<close>
   have p0: "(step prog_uaf_bug Phi_uaf ^^ 0) init_config init_config" by simp
@@ -623,8 +735,14 @@ proof -
   have six: "(6::nat) = Suc (Suc (Suc (Suc (Suc (Suc 0)))))" by simp
   have p6: "(step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>6, \<rho>6, H6)"
     unfolding six by (rule p6suc)
+  have p7suc: "(step prog_uaf_bug Phi_uaf ^^ Suc (Suc (Suc (Suc (Suc (Suc (Suc 0)))))))
+                 init_config (\<sigma>7, \<rho>7, H7)"
+    by (rule relpowp_Suc_I[OF p6suc s7])
+  have seven: "(7::nat) = Suc (Suc (Suc (Suc (Suc (Suc (Suc 0))))))" by simp
+  have p7: "(step prog_uaf_bug Phi_uaf ^^ 7) init_config (\<sigma>7, \<rho>7, H7)"
+    unfolding seven by (rule p7suc)
   show ?thesis
-    using r6[unfolded R_def] p6 h6 by blast
+    using r6[unfolded R_def] p6 h6 r7[unfolded R_def] p7 h7 freed7 by blast
 qed
 
 text \<open>The horizon facts depend only on a history's LABEL set, so the chain's final
@@ -700,6 +818,87 @@ lemma prog_uaf_bug_length: "length prog_uaf_bug = 9"
   by (simp add: prog_uaf_bug_def)
 
 
+subsection \<open>The UAF REALISED: the free is processed, and the deref is then enabled\<close>
+
+text \<open>@{term uaf_config} above is the paper's @{text "tab-fut-step-bug"} state, and it
+  is a PRECURSOR: the free MAY be scheduled while the deref has not run.  It does not
+  by itself say the free happens first -- the reader could still deref before the
+  reclaimer frees.
+
+  @{term uaf_realised} is the violation itself: the deallocation is COMMITTED in the
+  history, and the deref of that same object is in the horizon, i.e.\ it is a legal
+  next step.  Committing the free requires the operational semantics to actually
+  execute an instruction nested in a branch body, which is what the flattened
+  instruction lookup @{term instrs} makes possible.\<close>
+
+definition uaf_realised :: "Phi \<Rightarrow> iloc \<Rightarrow> iloc \<Rightarrow> config \<Rightarrow> bool" where
+  "uaf_realised Phi free_il deref_il cfg \<longleftrightarrow>
+     (let (\<sigma>, \<rho>, H) = cfg
+      in ev0 free_il \<in> hist_labels H \<and> ev0 deref_il \<in> horizon_lbls Phi H)"
+
+text \<open>The end-to-end statement: a REACHABLE configuration of the buggy program has the
+  free of @{text rC} committed with the deref of @{text rC} enabled.\<close>
+theorem uaf_realised_bug:
+  "\<exists>cfg. opsem_client.reachable prog_uaf_bug Phi_uaf cfg \<and>
+         uaf_realised Phi_uaf bug_free_il bug_deref_il cfg"
+proof -
+  from reachable_uaf_chain obtain \<sigma> \<rho> H where
+    reach: "opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H)"
+    and hl: "hist_labels H = L7"
+    by blast
+  have "uaf_realised Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
+    unfolding uaf_realised_def bug_free_il_def bug_deref_il_def
+    using hl horizon_lbls_deref_after_free[OF hl] by simp
+  with reach show ?thesis by blast
+qed
+
+text \<open>Its derivation-length refinement: SEVEN @{term step} applications -- the six that
+  reach the precursor state, plus the one that processes the free.\<close>
+theorem uaf_realised_in_7_steps:
+  "\<exists>cfg. (step prog_uaf_bug Phi_uaf ^^ 7) init_config cfg \<and>
+         uaf_realised Phi_uaf bug_free_il bug_deref_il cfg"
+proof -
+  from reachable_uaf_chain obtain \<sigma> \<rho> H where
+    pw: "(step prog_uaf_bug Phi_uaf ^^ 7) init_config (\<sigma>, \<rho>, H)"
+    and hl: "hist_labels H = L7"
+    by blast
+  have "uaf_realised Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
+    unfolding uaf_realised_def bug_free_il_def bug_deref_il_def
+    using hl horizon_lbls_deref_after_free[OF hl] by simp
+  with pw show ?thesis by blast
+qed
+
+text \<open>The realised UAF is a strictly LATER state than the precursor: the free is no
+  longer merely enabled but committed, so @{term uaf_config} (which requires the
+  deref pending) and @{term uaf_realised} are not the same predicate.  Both hold of
+  the bug, six and seven steps in respectively.\<close>
+
+text \<open>Finally the MEMORY-STATE reading of the same configuration, which owes nothing
+  to @{typ Phi}: the location the reader resolves @{text rC} to is not in
+  @{term memory} -- it has been deallocated -- and the reader's deref of it is
+  nevertheless a legal next step.  This is only meaningful because a location is now
+  GLOBAL: the object is allocated by the init preamble, published in the shared
+  @{term vmap}, deallocated by the reclaimer through @{term sym_of}, and resolved by
+  the reader through the same map (@{text opsem_client.shared_renvs_reachable}).  With a per-owner
+  location map the two names would denote unrelated symbols and this statement would
+  be vacuous.\<close>
+theorem uaf_realised_sigma_bug:
+  "\<exists>\<sigma> \<rho> H. opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H) \<and>
+            uaf_realised Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H) \<and>
+            resolve_loc (\<rho> (Thr 1)) (EReg vC) \<notin> memory \<sigma>"
+proof -
+  from reachable_uaf_chain obtain \<sigma> \<rho> H where
+    reach: "opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H)"
+    and hl: "hist_labels H = L7"
+    and freed: "resolve_loc (\<rho> (Thr 1)) (EReg vC) \<notin> memory \<sigma>"
+    by blast
+  have "uaf_realised Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
+    unfolding uaf_realised_def bug_free_il_def bug_deref_il_def
+    using hl horizon_lbls_deref_after_free[OF hl] by simp
+  with reach freed show ?thesis by blast
+qed
+
+
 section \<open>The fix: the UAF is excluded\<close>
 
 text \<open>The structural discriminator, mechanically checked: the deref->exit ppo edge
@@ -741,7 +940,7 @@ text \<open>HONESTY NOTE on the exclusion.  The intended end-to-end statement is
     @{text "\<not> (\<exists>cfg. reachable (prog_uaf_fixed, Phi_uaf_fixed) cfg \<and> uaf_config \<dots> cfg)"}
 
   i.e.\ NO reachable config of the fixed program is a UAF config.  However, against
-  the PROVISIONAL mordor-rendered @{term Phi_uaf_fixed} (the single-program futures of
+  the PROVISIONAL @{term Phi_uaf_fixed} (the single-program futures of
   @{text "uaf-bug-fixed"}), this statement is NOT established -- and in fact is
   FALSE at the horizon level, for a concrete and instructive reason.
 
@@ -768,7 +967,7 @@ text \<open>HONESTY NOTE on the exclusion.  The intended end-to-end statement is
   of @{text "uaf-bug-fixed"}.
 
   We record the honest counter-fact below, then discharge the intended exclusion over
-  the handshake-enriched @{term Phi_uaf_fixed_hs} (which mordor now emits, since the
+  the handshake-enriched @{term Phi_uaf_fixed_hs} (which the generator now emits, since the
   render carries the reads-from-derived handshake edge).\<close>
 
 text \<open>The witness history that REFUTES horizon-level exclusion against the provisional

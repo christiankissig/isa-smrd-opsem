@@ -4,14 +4,14 @@
     The SMRD event-structure semantics: events, preserved program order `ppo`,
     semantic dependency `DP`, executions, the future set `Phi` (a set of edge-sets
     over event-labels, one edge-set per execution -- matching the generated
-    `Phi_P` / mordor `futures` array), histories, posterior futures, the
+    `Phi_P`, the futures array), histories, posterior futures, the
     horizon `horizonPhi_H` (the actions a history `H` enables next), the
     instruction-granularity membership `(l : abar) :elem: horizonPhi_H`, and an
     episodicity predicate.
 
     This layer DEFINES how Phi is CONSUMED: the operational layer (OpSem) consults
-    Phi only through `horizonPhi_H`.  mordor is the computational ORACLE that
-    PRODUCES a concrete Phi per program; nothing here computes Phi.
+    Phi only through `horizonPhi_H`.  Phi is an INPUT to this development: a
+    concrete Phi per program is computed elsewhere; nothing here computes Phi.
 
     Frozen interface per docs/SPIKE_B_label_digest_design.md sec 6:
       - EventStruct is parameterised over Core's `elabel`/`action`;
@@ -57,7 +57,7 @@ definition labels_of :: "event set \<Rightarrow> elabel set" where
 
 section \<open>Preserved program order and semantic dependency\<close>
 
-text \<open>The two edge sources Phi is built from (mordor emits @{text "ppo \<union> DP"}
+text \<open>The two edge sources Phi is built from (Phi supplies @{text "ppo \<union> DP"}
   edges; this layer takes them as the abstract relations they range over).
 
   @{text ppo} -- PRESERVED PROGRAM ORDER -- is the program-faithful order of
@@ -75,7 +75,7 @@ definition ppo :: "(loopid \<Rightarrow> nat) \<Rightarrow> (event \<times> even
 text \<open>@{text DP} -- SEMANTIC DEPENDENCE (data / address / control + the
   read-from contribution).  It is genuinely program- AND execution-specific (it
   depends on which write each read takes, i.e. on @{text RF}), so it cannot be
-  derived from labels alone; mordor computes it per execution.  Here it is an
+  derived from labels alone; it is computed per execution.  Here it is an
   abstract parameter: a relation over event-labels supplied alongside Phi.  We
   keep it as a type so downstream layers can instantiate it.\<close>
 
@@ -92,7 +92,7 @@ section \<open>Executions\<close>
 text \<open>An EXECUTION bundles the events that occur with the per-execution
   semantic-dependence relation @{text DP} (read-from is folded into @{text DP} at
   the EventStruct level; the concrete @{text RF} lives in MemSem's @{text sigma}).
-  This is the per-execution object mordor produces one of for each entry of its
+  This is the per-execution object corresponding to one entry of the
   @{text futures} array.\<close>
 
 record execution =
@@ -119,14 +119,14 @@ section \<open>The future set Phi\<close>
 
 text \<open>A FUTURE is one execution's dependency edge-set: a set of
   @{text "(elabel \<times> elabel)"} edges over event-labels.  The generated constant
-  @{text Phi_P} (mordor's @{text futures} array, rendered by
+  @{text Phi_P} (the @{text futures} array, rendered by
   @{text generate_phi.py}) has exactly this shape -- one edge-set per execution.\<close>
 
 type_synonym future = "(elabel \<times> elabel) set"
 
 text \<open>@{text Phi} is the FUTURE SET: a set of futures (edge-sets), one per
   execution.  This is the frozen interface type (Spike B sec 6):
-  @{text "Phi :: (elabel \<times> elabel) set set"}.  mordor PRODUCES it; this layer
+  @{text "Phi :: (elabel \<times> elabel) set set"}.  It is PRODUCED elsewhere; this layer
   only CONSUMES it (via @{term horizonPhi} below).\<close>
 
 type_synonym Phi = "future set"
@@ -181,7 +181,7 @@ text \<open>This is the central deliverable: @{text horizonPhi_H} = the actions 
     1. @{term enabled_in} -- the enabled LABELS in ONE future @{text F};
     2. @{term horizon_lbls} -- the enabled labels across Phi (union over futures,
        restricted to futures CONSISTENT with @{text H}, see @{term consistent});
-    3. @{term horizonPhi} -- the enabled labels paired with the action a digest
+    3. @{term horizonPhi} -- the enabled labels paired with the action a program
        supplies (the @{text "(l : abar)"} the step rule consumes), exposed via the
        membership @{term in_horizon} below.\<close>
 
@@ -194,7 +194,7 @@ text \<open>A future @{text F} is CONSISTENT with a history @{text H} when every
   already committed in @{text H} that appears in @{text F} has all its @{text F}
   predecessors committed too -- i.e. @{text H}'s committed-and-in-@{text F} labels
   form an @{text F}-downward-closed frontier.  Only consistent futures contribute
-  to the horizon (mordor's @{text futures} are the maximal executions; @{text H}
+  to the horizon (the @{text futures} are the maximal executions; @{text H}
   selects the live ones).\<close>
 
 definition consistent :: "future \<Rightarrow> history \<Rightarrow> bool" where
@@ -212,7 +212,7 @@ text \<open>@{text horizonPhi_H}: the horizon as @{text "(label, action)"} EVENT
   An action is associated with a horizon label by an instruction's emitted
   action sequence; abstractly here a candidate event @{text "(l, a)"} is in the
   horizon iff its label is a horizon label.  (OpSem refines this by checking the
-  action against the digest's emitted @{term n_events} sequence; at the
+  action against the program's emitted @{term n_events} sequence; at the
   EventStruct level the alphabet is abstract, so the label gate is the interface.)\<close>
 
 definition horizonPhi :: "Phi \<Rightarrow> history \<Rightarrow> event set" where

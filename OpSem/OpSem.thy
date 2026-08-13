@@ -33,7 +33,7 @@
     RESTRICTION vs full paper faithfulness (documented, not overclaimed).  The
     paper's lb-reset RELABELS the loop body per iteration (`el_iters` advances by
     one per back-edge) instead of UNROLLING into unboundedly many iterations.  The
-    project's validated episodicity finding (mordor on `rcu-inc-loop.lit`,
+    project's validated episodicity finding (`rcu-inc-loop.lit`,
     EventStruct `episodic` / `episodic_future`) is that an episodic Phi collapses
     every loop to a SINGLE representative iteration window: the `el_iters`
     component is degenerate, so the representative window suffices and unrolling is
@@ -71,8 +71,25 @@ record renv =
   vmap  :: "var \<Rightarrow> sym"      \<comment> \<open>global variable to its symbolic location\<close>
   fresh :: sym               \<comment> \<open>next fresh symbol (allocation / load counter)\<close>
 
+text \<open>The symbol @{text 0} is reserved as the NULL symbol: it is the value of every
+  unbound register / variable, and @{term fresh} therefore starts at @{text 1} so
+  that no allocation or load ever hands out @{text 0}.  Without this reservation the
+  per-owner counters would each start at @{text 0} and an unbound register would be
+  indistinguishable from -- and would alias -- the first allocated location.\<close>
+
 definition init_renv :: renv where
-  "init_renv = \<lparr> rg = (\<lambda>_. 0), vmap = (\<lambda>_. 0), fresh = 0 \<rparr>"
+  "init_renv = \<lparr> rg = (\<lambda>_. 0), vmap = (\<lambda>_. 0), fresh = 1 \<rparr>"
+
+text \<open>The symbol a NAME denotes for the executing thread: its thread-local register
+  binding when it has one, and otherwise the GLOBAL location the name is bound to in
+  @{term vmap}.  (Core identifies @{typ var} and @{typ reg}, so one name space
+  carries both: @{text rtemp} / @{text rv} are thread-locals bound by loads, while
+  @{text rC} / @{text rcu} are globals published by the init preamble's
+  allocations.)  This fallback is what lets a thread reach an object allocated by
+  another owner; @{term rg} alone is thread-local and never crosses.\<close>
+
+definition sym_of :: "renv \<Rightarrow> reg \<Rightarrow> sym" where
+  "sym_of \<rho> r = (if rg \<rho> r \<noteq> 0 then rg \<rho> r else vmap \<rho> r)"
 
 text \<open>Resolve a command-level expression to an ACTION-level expression by
   substituting each register @{term r} by its current symbol @{term "rg \<rho> r"} (a
@@ -83,7 +100,7 @@ text \<open>Resolve a command-level expression to an ACTION-level expression by
 
 fun subst_expr :: "renv \<Rightarrow> expr \<Rightarrow> expr" where
   "subst_expr \<rho> (EInt n)    = EInt n"
-| "subst_expr \<rho> (EReg r)    = ESym (rg \<rho> r)"
+| "subst_expr \<rho> (EReg r)    = ESym (sym_of \<rho> r)"
 | "subst_expr \<rho> (ESym s)    = ESym s"
 | "subst_expr \<rho> (EDeref e)  = EDeref (subst_expr \<rho> e)"
 | "subst_expr \<rho> (EAdd a b)  = EAdd (subst_expr \<rho> a) (subst_expr \<rho> b)"
@@ -103,14 +120,19 @@ text \<open>Resolve a command-level expression to the SYMBOL it names as a locat
   the read/write-PTR and free commands use.\<close>
 
 fun resolve_loc :: "renv \<Rightarrow> expr \<Rightarrow> sym" where
-  "resolve_loc \<rho> (EReg r)   = rg \<rho> r"
+  "resolve_loc \<rho> (EReg r)   = sym_of \<rho> r"
 | "resolve_loc \<rho> (ESym s)   = s"
 | "resolve_loc \<rho> (EDeref e) = resolve_loc \<rho> e"
 | "resolve_loc \<rho> _          = 0"
 
-text \<open>Bind a register to a symbol.\<close>
+text \<open>Bind a register to a symbol (thread-local).\<close>
 definition set_reg :: "renv \<Rightarrow> reg \<Rightarrow> sym \<Rightarrow> renv" where
   "set_reg \<rho> r s = \<rho>\<lparr> rg := (rg \<rho>)(r := s) \<rparr>"
+
+text \<open>Bind a NAME to a global location symbol (shared -- published to every owner by
+  @{term publish} below).  An allocation is the only thing that creates one.\<close>
+definition set_var :: "renv \<Rightarrow> var \<Rightarrow> sym \<Rightarrow> renv" where
+  "set_var \<rho> x s = \<rho>\<lparr> vmap := (vmap \<rho>)(x := s) \<rparr>"
 
 text \<open>Hand out the current fresh symbol and bump the counter.\<close>
 definition next_sym :: "renv \<Rightarrow> sym \<times> renv" where
@@ -179,11 +201,14 @@ fun cmd_effect ::
                             x a (subst_expr \<rho> e\<^sub>s) (subst_expr \<rho> e\<^sub>n)
       in Some (map snd las, las, set_reg \<rho>' r a))"
 | "cmd_effect casok l (Malloc r e) \<rho> =
+     \<comment> \<open>an allocation binds its name BOTH thread-locally (@{term rg}) and GLOBALLY
+        (@{term vmap}), so other threads can reach the object: this is what makes
+        the init preamble's @{text rC} / @{text rcu} visible to the workers\<close>
      (let (x, \<rho>') = next_sym \<rho>;
           act = AllocA x (subst_expr \<rho> e)
-      in Some ([act], [(sub l 0, act)], set_reg \<rho>' r x))"
+      in Some ([act], [(sub l 0, act)], set_var (set_reg \<rho>' r x) r x))"
 | "cmd_effect casok l (Free r) \<rho> =
-     (let act = DeallocA (rg \<rho> r)
+     (let act = DeallocA (sym_of \<rho> r)
       in Some ([act], [(sub l 0, act)], \<rho>))"
 | "cmd_effect casok l (IfElse b t f) \<rho> = None"
 | "cmd_effect casok l (While lp b body) \<rho> = None"
@@ -210,6 +235,47 @@ type_synonym renvs = "owner \<Rightarrow> renv"
 
 definition init_renvs :: renvs where
   "init_renvs = (\<lambda>_. init_renv)"
+
+text \<open>Only @{term rg} is genuinely thread-local.  The other two components of a
+  @{typ renv} are GLOBAL and must not be forked per owner:
+
+    \<^item> @{term vmap} maps a program variable to the symbolic location it was
+      allocated at -- one object, one location, whoever looks;
+    \<^item> @{term fresh} is the allocation / load symbol counter -- per-owner counters
+      would each restart at the same value and hand the SAME symbol to unrelated
+      objects, silently aliasing them.
+
+  @{term publish} is the write-back a step performs: the executing owner takes the
+  new @{typ renv} whole, and every other owner receives the updated @{term vmap} and
+  @{term fresh} while keeping its own registers.  Semantically the configuration
+  therefore carries one shared location map and one shared counter (see
+  @{term shared_renvs} and @{text shared_renvs_publish} below); representing them as
+  broadcast fields of @{typ renv} rather than as extra @{text config} components
+  keeps the client-visible @{text "(sigma, rho, H)"} triple unchanged.\<close>
+
+definition publish :: "renvs \<Rightarrow> owner \<Rightarrow> renv \<Rightarrow> renvs" where
+  "publish \<rho> ow \<rho>' =
+     (\<lambda>o'. if o' = ow then \<rho>'
+           else (\<rho> o')\<lparr> vmap := vmap \<rho>', fresh := fresh \<rho>' \<rparr>)"
+
+lemma publish_same [simp]: "publish \<rho> ow \<rho>' ow = \<rho>'"
+  by (simp add: publish_def)
+
+lemma rg_publish_other:
+  "o' \<noteq> ow \<Longrightarrow> rg (publish \<rho> ow \<rho>' o') = rg (\<rho> o')"
+  by (simp add: publish_def)
+
+text \<open>The invariant the broadcast maintains: all owners agree on the global
+  components.\<close>
+definition shared_renvs :: "renvs \<Rightarrow> bool" where
+  "shared_renvs \<rho> \<longleftrightarrow>
+     (\<forall>o1 o2. vmap (\<rho> o1) = vmap (\<rho> o2) \<and> fresh (\<rho> o1) = fresh (\<rho> o2))"
+
+lemma shared_renvs_init: "shared_renvs init_renvs"
+  by (simp add: shared_renvs_def init_renvs_def)
+
+lemma shared_renvs_publish: "shared_renvs (publish \<rho> ow \<rho>')"
+  by (simp add: shared_renvs_def publish_def)
 
 
 section \<open>Operational configuration\<close>
@@ -245,16 +311,14 @@ text \<open>The inductive future-stepping relation @{text "prog, Phi \<turnstile
     @{text sigma}, update that thread's register slice, and extend @{text H} with the
     committed events.  RMWs ride this rule (their effect is several sub-actions).
   \<^item> @{text Then} -- an @{term IfElse} whose guard the path predicate admits commits
-    the guard as a @{term Branch} event and proceeds into the THEN body's first
-    instruction's effect.
-  \<^item> @{text Else} -- symmetric, committing the negated guard and proceeding into the
-    ELSE body.
+    the guard as a @{term Branch} event.  It does NOT descend into the body: body
+    instructions are addressed directly by @{text Step} (see below).
+  \<^item> @{text Else} -- symmetric, committing the negated guard.
   \<^item> @{text Loop} -- (W8b) a @{term While} whose guard the path predicate admits:
     commit the guard as a @{term Branch} event at @{text "l#0"}, exactly as
-    @{text Then}.  The body is NESTED (not in @{term "set prg"}) and is NOT stepped
-    here; under episodicity it is enabled through the horizon at the representative
-    single-iteration window (the lb-reset collapses iterations rather than
-    unrolling -- see the header comment).
+    @{text Then}.  Under episodicity the body is enabled through the horizon at the
+    representative single-iteration window (the lb-reset collapses iterations rather
+    than unrolling -- see the header comment).
   \<^item> @{text LoopExit} -- (W8b) symmetric: the guard fails, commit the negated guard
     @{text "Branch (ENot \<dots>)"} and leave the loop.
 
@@ -262,7 +326,24 @@ text \<open>The inductive future-stepping relation @{text "prog, Phi \<turnstile
   @{term IfElse} / @{term While} instruction; the horizon gate uses that
   instruction's own label.  We thread @{term prg} only to fetch the program text; the
   executing thread is recovered from each label as @{term "ilo_owner l"}, and the
-  register environment @{term \<rho>} is indexed by it.\<close>
+  register environment @{term \<rho>} is indexed by it.
+
+  NESTED INSTRUCTIONS.  Every rule looks its instruction up in the FLATTENED program
+  @{term "instrs prg"} (Core), not in @{term "set prg"}.  With the top-level lookup, an
+  instruction inside an @{term IfElse} branch or a @{term While} body was in no rule's
+  reach at all -- @{text Step} could not match it (it is not a member of the top-level
+  list) and no branch rule descended into a body -- so nested instructions were dead
+  code and no derivation could ever execute one.  For a program with no nested bodies
+  the two lookups coincide (@{thm instrs_flat}), so this is conservative.
+
+  What gates a nested instruction is then the horizon alone.  That is the faithful
+  reading of a computed @{typ Phi}: an execution there carries no branch EVENT
+  (branch conditions are re-attached to the events they guard, and the control
+  dependence appears as a @{text dp} edge from the deciding read to the guarded
+  instruction), so the body instruction's Phi-predecessors already encode the
+  branch.  @{text Then} / @{text Else} remain for a @{typ Phi} that does carry branch
+  labels; against one that does not, their @{term in_horizon} premise is simply
+  unsatisfiable and the body steps under its own @{text dp} edge.\<close>
 
 inductive
   step :: "program \<Rightarrow> Phi \<Rightarrow> config \<Rightarrow> config \<Rightarrow> bool"
@@ -273,18 +354,18 @@ where
         @{term While}); enabled and effectful.  The executing thread is
         @{term "ilo_owner l"}; only its register slice @{term "\<rho> (ilo_owner l)"} is
         read and updated.\<close>
-    "\<lbrakk> (l is c) \<in> set prg;
+    "\<lbrakk> (l is c) \<in> set (instrs prg);
        \<forall>b tb fb. c \<noteq> IfElse b tb fb;  \<forall>lp b body. c \<noteq> While lp b body;
        cmd_effect casok l c (\<rho> (ilo_owner l)) = Some (abar, las, \<rho>t');
        in_horizon (horizon_label l) abar Phi H;
        \<sigma>' = apply_actions las \<sigma>;
        H' = commit_events las H \<rbrakk>
-     \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>(ilo_owner l := \<rho>t'), H')"
+     \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', publish \<rho> (ilo_owner l) \<rho>t', H')"
 | Then:
     \<comment> \<open>@{term IfElse} guard taken (THEN branch): commit the guard, resolved against the
         executing thread's registers @{term "\<rho> (ilo_owner l)"} (the paper's
         @{text "ifCond\<^sub>t"}).  Registers are unchanged by a branch.\<close>
-    "\<lbrakk> (l is IfElse b tb fb) \<in> set prg;
+    "\<lbrakk> (l is IfElse b tb fb) \<in> set (instrs prg);
        gact = Branch (subst_expr (\<rho> (ilo_owner l)) b);
        in_horizon (horizon_label l) [gact] Phi H;
        holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
@@ -294,7 +375,7 @@ where
 | Else:
     \<comment> \<open>@{term IfElse} guard not taken (ELSE branch): commit the negated guard,
         resolved against @{term "\<rho> (ilo_owner l)"}.\<close>
-    "\<lbrakk> (l is IfElse b tb fb) \<in> set prg;
+    "\<lbrakk> (l is IfElse b tb fb) \<in> set (instrs prg);
        gact = Branch (ENot (subst_expr (\<rho> (ilo_owner l)) b));
        in_horizon (horizon_label l) [gact] Phi H;
        \<not> holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
@@ -305,7 +386,7 @@ where
     \<comment> \<open>(W8b) @{term While} guard holds (enter / iterate): commit the loop guard,
         resolved against @{term "\<rho> (ilo_owner l)"}, at the representative window
         @{text "l#0"}.  The nested body is enabled through the horizon, not stepped here.\<close>
-    "\<lbrakk> (l is While lp b body) \<in> set prg;
+    "\<lbrakk> (l is While lp b body) \<in> set (instrs prg);
        gact = Branch (subst_expr (\<rho> (ilo_owner l)) b);
        in_horizon (horizon_label l) [gact] Phi H;
        holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
@@ -314,7 +395,7 @@ where
      \<Longrightarrow> step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>, H')"
 | LoopExit:
     \<comment> \<open>(W8b) @{term While} guard fails (exit): commit the negated guard and leave.\<close>
-    "\<lbrakk> (l is While lp b body) \<in> set prg;
+    "\<lbrakk> (l is While lp b body) \<in> set (instrs prg);
        gact = Branch (ENot (subst_expr (\<rho> (ilo_owner l)) b));
        in_horizon (horizon_label l) [gact] Phi H;
        \<not> holds (SOME e. e \<in> phi \<sigma>) (subst_expr (\<rho> (ilo_owner l)) b);
@@ -324,6 +405,18 @@ where
 
 text \<open>Sanity: the rules are @{text Step}, @{text Then}, @{text Else}, and the W8b
   loop rules @{text Loop} / @{text LoopExit} (the @{text lb}-reset, single-window).\<close>
+
+text \<open>Stepping keeps the global components global: @{text Step} writes them back with
+  @{term publish}, and the guard rules leave @{term \<rho>} alone.  So all owners always
+  agree on the location map and the symbol counter.\<close>
+lemma shared_renvs_step_cfg:
+  assumes "step prg Phi cfg cfg'" and "shared_renvs (fst (snd cfg))"
+  shows "shared_renvs (fst (snd cfg'))"
+  using assms by (auto elim!: step.cases simp: shared_renvs_publish)
+
+lemma shared_renvs_step:
+  "step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>', H') \<Longrightarrow> shared_renvs \<rho> \<Longrightarrow> shared_renvs \<rho>'"
+  using shared_renvs_step_cfg[of prg Phi "(\<sigma>, \<rho>, H)" "(\<sigma>', \<rho>', H')"] by simp
 
 
 section \<open>Reflexive-transitive closure and the client locale\<close>
@@ -359,7 +452,7 @@ text \<open>A client (UAF, RCU, \<dots>) instantiates the program text @{term pr
   @{text Ownership}'s @{text ownership_system}), so a client wanting the
   Owicki-Gries / ownership machinery over @{term step} would have to bridge
   the two itself (the deferred "Phase 6" interpretation, see
-  @{text "docs/W1_owicki_gries_design.md"} \<section>6) -- an
+  @{text "docs/W1_owicki_gries_design.md"} section 6) -- an
   @{text interpretation} or @{text sublocale} linking this locale's @{term
   step} to @{text transition_system}'s @{text astep} is not done anywhere in
   this codebase yet.\<close>
@@ -404,6 +497,22 @@ proof -
       by (simp add: reachable_def reachable_from_def step.hyps(1))
     from assms(3)[OF this step.IH step.hyps(2)] show ?case .
   qed
+qed
+
+text \<open>Every reachable configuration has ONE location map and ONE symbol counter,
+  shared by all owners -- the property that makes an object allocated by the init
+  preamble reachable from a worker thread, and that stops two owners handing the
+  same symbol to unrelated objects.\<close>
+lemma shared_renvs_reachable:
+  assumes "reachable cfg"
+  shows "shared_renvs (fst (snd cfg))"
+  using assms
+proof (induction rule: reachable_induct)
+  case init
+  show ?case by (simp add: init_config_def shared_renvs_init)
+next
+  case (step c c')
+  then show ?case using shared_renvs_step_cfg by blast
 qed
 
 end

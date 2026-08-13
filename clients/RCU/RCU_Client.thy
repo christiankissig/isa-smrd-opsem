@@ -4,7 +4,7 @@
     The RCU client in the SPINE style: data-as-program over the REAL Core types.
 
     The program is DATA, a labelled `command` list -- there is no `pc` enum; control
-    flow is the rolled `IfElse` / `While` of `Core.command`.
+    flow is the nested `IfElse` / `While` of `Core.command`.
 
     An abstract `command` datatype with operands + memory orders gets ONE generic
     effect rule per command: exactly `Core.command` + `OpSem.cmd_effect` + the
@@ -18,17 +18,17 @@
     rcu flags and the registers are ordinary `var` / `reg` operands).  Mirrors
     `clients/UAF_Bug/UAF_Bug.thy`.
 
-    Structural source of truth: the mordor-rendered digests `RCU_prog_digest.thy`
+    Structural source of truth: the generated programs in `RCU_prog_digest.thy`
     (rcu3) and `RCU_inc_loop_digest.thy` (rcuincloop).  Those carry provisional
     placeholder types and string labels; here everything is in the REAL Core /
     OpSem types, session-qualified, with `iloc` labels.
 
     SCOPE.  The full RCU program contains LOOPS (the inc() retry loop and the
-    sync() poll loops -- `While` / `Do` in the digests).  The OpSem step relation
+    sync() poll loops -- `While` / `Do` in those programs).  The OpSem step relation
     imported here is the NON-LOOP fragment: `cmd_effect` returns `None` for
     `While`, and there is no `lb`-reset / episodicity rule.  So:
 
-      * `prog_RCU` faithfully includes the rolled `While` body, but the loop CANNOT
+      * `prog_RCU` faithfully includes the nested `While` body, but the loop CANNOT
         be stepped by this OpSem -- only the straight-line init preamble and the
         straight-line body commands are steppable here.
       * NO end-to-end RCU safety theorem (no-use-after-free) is claimed in this
@@ -46,9 +46,9 @@ begin
 section \<open>Owners, labels, variables, registers\<close>
 
 text \<open>One reclaiming worker thread @{term "Thr 0"} (the RCU reader/updater running
-  inc()), plus the init preamble @{term Init} (mordor @{text g}).  A single worker
+  inc()), plus the init preamble @{term Init} (@{text g}).  A single worker
   is enough to exhibit the inc() critical-section shape over the real types; the
-  digests carry three symmetric workers (t0/t1/t2), added by replicating the body
+  generated programs carry three symmetric workers (t0/t1/t2), added by replicating the body
   with a different @{typ owner}.
 
   The label-encoding helpers @{term il} / @{term il_in} / @{term ev0} /
@@ -66,15 +66,15 @@ abbreviation "rv    \<equiv> ''rv''"      \<comment> \<open>the value read throu
 abbreviation "rn    \<equiv> ''rn''"      \<comment> \<open>the freshly allocated replacement node\<close>
 abbreviation "rsucc \<equiv> ''rsucc''"   \<comment> \<open>the CAS success register (loop guard)\<close>
 
-text \<open>The single retry loop of inc() (mordor @{text loop_id} 1).\<close>
+text \<open>The single retry loop of inc() (loop id 1).\<close>
 definition rcu_loop :: loopid where "rcu_loop = 1"
 
 
 section \<open>The RCU program @{text prog_RCU} (Core-typed labelled commands)\<close>
 
 text \<open>The inc() critical section, retyped from the @{text rcuincloop} / @{text rcu3}
-  digests into Core's @{typ command} / @{typ instr}, for one worker @{term "Thr 0"}.
-  The body of the retry loop sits inside the rolled @{term While} (loop
+  programs into Core's @{typ command} / @{typ instr}, for one worker @{term "Thr 0"}.
+  The body of the retry loop sits inside the nested @{term While} (loop
   @{term rcu_loop}); the CAS-success register @{term rsucc} is the loop guard.
 
   Note the absence of any per-PC encoding: every line is a generic @{typ command}
@@ -82,7 +82,7 @@ text \<open>The inc() critical section, retyped from the @{text rcuincloop} / @{
 
 definition prog_RCU :: program where
   "prog_RCU =
-   [ \<comment> \<open>init preamble (mordor g.*): allocate + publish the rcu flag and the object\<close>
+   [ \<comment> \<open>init preamble (the g.* labels): allocate + publish the rcu flag and the object\<close>
      g_il 1 is Malloc   vrcu (EInt 1),
      g_il 2 is WritePtr Rlx (EReg vrcu) (EInt 0),
      g_il 3 is Malloc   vC   (EInt 1),
@@ -92,7 +92,7 @@ definition prog_RCU :: program where
      t0_il 1 is Malloc   rn (EInt 1),
      t0_il 2 is WritePtr Rlx (EReg vrcu) (EInt 1),      \<comment> \<open>rcu_enter (raise flag)\<close>
      t0_il 3 is While rcu_loop (EEq (EReg rsucc) (EInt 0))
-        [ \<comment> \<open>rolled retry-loop body\<close>
+        [ \<comment> \<open>nested retry-loop body\<close>
           il_in (Thr 0) 4 rcu_loop is Faa     Acq Rel rs (EReg vC) (EInt 0),
           il_in (Thr 0) 5 rcu_loop is ReadPtr Rlx rv (EReg rs),
           il_in (Thr 0) 6 rcu_loop is WritePtr Rlx (EReg rn) (EAdd (EReg rv) (EInt 1)),
@@ -127,18 +127,20 @@ lemma ev0_eq_iff: "ev0 (il o1 s1) = ev0 (il o2 s2) \<longleftrightarrow> o1 = o2
 text \<open>The init preamble and the worker top-level are present in the program text
   (the membership facts the @{text step.Step} rule consumes).\<close>
 lemma prog_RCU_init_mem:
-  "(g_il 1 is Malloc   vrcu (EInt 1)) \<in> set prog_RCU"
-  "(g_il 2 is WritePtr Rlx (EReg vrcu) (EInt 0)) \<in> set prog_RCU"
-  "(g_il 3 is Malloc   vC (EInt 1)) \<in> set prog_RCU"
-  "(g_il 4 is WritePtr Rlx (EReg vC) (EInt 0)) \<in> set prog_RCU"
-  "(t0_il 1 is Malloc rn (EInt 1)) \<in> set prog_RCU"
-  "(t0_il 2 is WritePtr Rlx (EReg vrcu) (EInt 1)) \<in> set prog_RCU"
-  "(t0_il 8 is WritePtr Rlx (EReg vrcu) (EInt 0)) \<in> set prog_RCU"
-  by (simp_all add: prog_RCU_def)
+  "(g_il 1 is Malloc   vrcu (EInt 1)) \<in> set (instrs prog_RCU)"
+  "(g_il 2 is WritePtr Rlx (EReg vrcu) (EInt 0)) \<in> set (instrs prog_RCU)"
+  "(g_il 3 is Malloc   vC (EInt 1)) \<in> set (instrs prog_RCU)"
+  "(g_il 4 is WritePtr Rlx (EReg vC) (EInt 0)) \<in> set (instrs prog_RCU)"
+  "(t0_il 1 is Malloc rn (EInt 1)) \<in> set (instrs prog_RCU)"
+  "(t0_il 2 is WritePtr Rlx (EReg vrcu) (EInt 1)) \<in> set (instrs prog_RCU)"
+  "(t0_il 8 is WritePtr Rlx (EReg vrcu) (EInt 0)) \<in> set (instrs prog_RCU)"
+  \<comment> \<open>the step rules address the FLATTENED program; for these top-level instructions
+      that is immediate from @{thm set_prog_subset_instrs}\<close>
+  using set_prog_subset_instrs by (fastforce simp: prog_RCU_def)+
 
 text \<open>The retry loop is a genuine @{term While} keyed by @{term rcu_loop}; its body
   is the four-instruction read-modify-write sequence.  (Lookup through @{term prog}
-  -- the rolled per-owner command map.)\<close>
+  -- the per-owner command map, over the FLATTENED program.)\<close>
 lemma prog_RCU_loop:
   "prog prog_RCU (Thr 0) (t0_il 3)
      = Some (While rcu_loop (EEq (EReg rsucc) (EInt 0))
@@ -155,6 +157,16 @@ lemma prog_RCU_reclaim:
      = Some (IfElse (EEq (EReg rsucc) (EInt 1)) [ t0_il 10 is Free rs ] [])"
   by (simp add: prog_def prog_RCU_def il_def il_in_def is_entry_def)
 
+text \<open>Because @{term prog} ranges over the FLATTENED program, the same lookup now also
+  reaches INSIDE those bodies -- the loop body's instructions and the reclaim's free
+  each have an entry of their own.  Over the nested list they had none, even though
+  the step rules can fire for them; the map and the rules now agree on what the
+  program contains.\<close>
+lemma prog_RCU_nested:
+  "prog prog_RCU (Thr 0) (il_in (Thr 0) 5 rcu_loop) = Some (ReadPtr Rlx rv (EReg rs))"
+  "prog prog_RCU (Thr 0) (t0_il 10) = Some (Free rs)"
+  by (simp_all add: prog_def prog_RCU_def il_def il_in_def is_entry_def)
+
 
 section \<open>The generic per-command effect (one rule, no per-PC case)\<close>
 
@@ -167,26 +179,28 @@ lemma rcu_effect_malloc:
   "cmd_effect casok (g_il 1) (Malloc vrcu (EInt 1)) \<rho>
      = Some ([AllocA (fresh \<rho>) (EInt 1)],
              [(sub (g_il 1) 0, AllocA (fresh \<rho>) (EInt 1))],
-             set_reg (snd (next_sym \<rho>)) vrcu (fresh \<rho>))"
+             set_var (set_reg (snd (next_sym \<rho>)) vrcu (fresh \<rho>)) vrcu (fresh \<rho>))"
+  \<comment> \<open>an allocation now publishes its location in the SHARED @{term vmap} as well as
+      binding the allocating thread's register\<close>
   by (simp add: next_sym_def Let_def)
 
 lemma rcu_effect_writeptr:
   "cmd_effect casok (g_il 2) (WritePtr Rlx (EReg vrcu) (EInt 0)) \<rho>
-     = Some ([Write Rlx (rg \<rho> vrcu) (EInt 0)],
-             [(sub (g_il 2) 0, Write Rlx (rg \<rho> vrcu) (EInt 0))], \<rho>)"
+     = Some ([Write Rlx (sym_of \<rho> vrcu) (EInt 0)],
+             [(sub (g_il 2) 0, Write Rlx (sym_of \<rho> vrcu) (EInt 0))], \<rho>)"
   by (simp add: Let_def)
 
 lemma rcu_effect_readptr:
   "cmd_effect casok (il_in (Thr 0) 5 rcu_loop) (ReadPtr Rlx rv (EReg rs)) \<rho>
-     = Some ([Read Rlx (rg \<rho> rs) (fresh \<rho>)],
-             [(sub (il_in (Thr 0) 5 rcu_loop) 0, Read Rlx (rg \<rho> rs) (fresh \<rho>))],
+     = Some ([Read Rlx (sym_of \<rho> rs) (fresh \<rho>)],
+             [(sub (il_in (Thr 0) 5 rcu_loop) 0, Read Rlx (sym_of \<rho> rs) (fresh \<rho>))],
              set_reg (snd (next_sym \<rho>)) rv (fresh \<rho>))"
   by (simp add: next_sym_def Let_def)
 
 lemma rcu_effect_free:
   "cmd_effect casok (t0_il 10) (Free rs) \<rho>
-     = Some ([DeallocA (rg \<rho> rs)],
-             [(sub (t0_il 10) 0, DeallocA (rg \<rho> rs))], \<rho>)"
+     = Some ([DeallocA (sym_of \<rho> rs)],
+             [(sub (t0_il 10) 0, DeallocA (sym_of \<rho> rs))], \<rho>)"
   by (simp add: Let_def)
 
 text \<open>The deref is an RMW (@{term Faa}) -- ONE command emitting TWO sub-events
@@ -212,7 +226,7 @@ lemma rcu_effect_ifelse_none:
 
 section \<open>A steppable reachability chain over the loop-free init preamble\<close>
 
-text \<open>The full RCU @{term Phi} (the mordor future set, with the retry/poll loops) is
+text \<open>The full RCU @{term Phi} (the computed future set, with the retry/poll loops) is
   out of scope for this loop-free layer.  To exhibit that @{term prog_RCU} as DATA
   plugs into the OpSem step relation we use a single small future containing the two
   preamble events with one program-order edge @{text "g.1#0 -> g.2#0"} -- exactly
@@ -308,8 +322,8 @@ proof -
     have inh: "in_horizon (horizon_label (g_il 1)) abar Phi_RCU_pre {}"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using g1_in_horizon[of "{}"] by (simp add: hist_labels_def)
-    have mem: "(g_il 1 is ?c) \<in> set prog_RCU" by (rule prog_RCU_init_mem)
-    let ?st = "(apply_actions las init_mstate, init_renvs (ilo_owner (g_il 1) := \<rho>'), commit_events las {})"
+    have mem: "(g_il 1 is ?c) \<in> set (instrs prog_RCU)" by (rule prog_RCU_init_mem)
+    let ?st = "(apply_actions las init_mstate, publish init_renvs (ilo_owner (g_il 1)) \<rho>', commit_events las {})"
     have stp: "step prog_RCU Phi_RCU_pre init_config ?st"
       unfolding init_config_def
       by (rule step.Step[where \<rho>=init_renvs, OF mem _ _ ce inh refl refl]) auto
@@ -325,7 +339,7 @@ proof -
     and h2: "hist_labels H2 = { ev0 (g_il 1), ev0 (g_il 2) }"
   proof -
     let ?c = "WritePtr Rlx (EReg vrcu) (EInt 0)"
-    define act where "act = Write Rlx (rg (\<rho>1 (ilo_owner (g_il 2))) vrcu) (EInt 0)"
+    define act where "act = Write Rlx (sym_of (\<rho>1 (ilo_owner (g_il 2))) vrcu) (EInt 0)"
     obtain abar las \<rho>' where
       ce: "cmd_effect False (g_il 2) ?c (\<rho>1 (ilo_owner (g_il 2))) = Some (abar, las, \<rho>')"
       and abar: "abar = [act]"
@@ -334,8 +348,8 @@ proof -
     have inh: "in_horizon (horizon_label (g_il 2)) abar Phi_RCU_pre H1"
       unfolding in_horizon_def horizon_label_eq_ev0 abar
       using g2_in_horizon[OF h1] by simp
-    have mem: "(g_il 2 is ?c) \<in> set prog_RCU" by (rule prog_RCU_init_mem)
-    let ?st = "(apply_actions las \<sigma>1, \<rho>1 (ilo_owner (g_il 2) := \<rho>'), commit_events las H1)"
+    have mem: "(g_il 2 is ?c) \<in> set (instrs prog_RCU)" by (rule prog_RCU_init_mem)
+    let ?st = "(apply_actions las \<sigma>1, publish \<rho>1 (ilo_owner (g_il 2)) \<rho>', commit_events las H1)"
     have stp: "step prog_RCU Phi_RCU_pre (\<sigma>1, \<rho>1, H1) ?st"
       by (rule step.Step[where \<rho>=\<rho>1, OF mem _ _ ce inh refl refl]) auto
     have "hist_labels (commit_events las H1) = { ev0 (g_il 1), ev0 (g_il 2) }"
@@ -348,23 +362,23 @@ proof -
 qed
 
 
-section \<open>Use-after-free exclusion over the mordor-DERIVED loop @{term "\<Phi>_rcuincreclaim"}\<close>
+section \<open>Use-after-free exclusion over the GENERATED loop @{term "\<Phi>_rcuincreclaim"}\<close>
 
 text \<open>This is the primary deliverable: a use-after-free EXCLUSION over the
   GENERATED future set @{term \<Phi>_rcuincreclaim} (from @{text RCU_Phi_gen}, rendered
-  by @{text "scripts/generate_phi.py --core"} from the mordor isa-mode fixture
+  by @{text "scripts/generate_phi.py --core"} from the isa-mode fixture
   @{text "workspace/spikes/rcu/rcu-inc-reclaim_isa_sc2.json"}), NOT a hand-built
   Phi.  It mirrors the UAF client's horizon argument
   (@{text uaf_config_excluded_fixed_hs_horizon}).
 
   SCOPE (honest).  This is the SINGLE-THREAD inc()+reclaim analogue: one RCU
   updater running the inc() retry loop followed by a reclaim-free, all in the init
-  scope (mordor labels @{text "g.*"}, retry loop id @{text 1}).  The mordor sc2
+  scope (labels @{text "g.*"}, retry loop id @{text 1}).  The generated sc2
   futures already carry the intra-thread @{text "ppo \<union> DP"} ordering edge
   deref @{text "->"} free DIRECTLY, in EVERY free-bearing execution, so NO
   rf-enrichment is needed for this exclusion.  The full 3-thread cross-thread RCU
   no-UAF result is NOT claimed here (it needs a terminating multi-thread
-  @{text "\<Phi>_RCU"} mordor does not produce).\<close>
+  @{text "\<Phi>_RCU"} the generator does not produce).\<close>
 
 text \<open>The three labels of the generated fixture the argument turns on, in the
   fixture's OWN label space (@{text "g.*"}, @{term Init}, loop @{text 1}):
@@ -399,7 +413,7 @@ subsection \<open>The deref @{text "\<rightarrow>"} free edge is present in EVER
 text \<open>The crux structural fact, read directly off @{term \<Phi>_rcuincreclaim}: in EVERY
   execution's edge-set the intra-thread @{text "ppo \<union> DP"} edge
   @{text "g.12@1:1#0 \<rightarrow> g.18#0"} (deref before free) is present.  This is the
-  mordor-derived dependence that orders the read-side deref before the reclaim, and
+  generated dependence that orders the read-side deref before the reclaim, and
   it is what excludes the UAF.\<close>
 lemma deref_free_edge_in_all_gen:
   "\<forall>F \<in> \<Phi>_rcuincreclaim. (rcu_gen_deref, rcu_gen_free) \<in> F"
@@ -475,7 +489,7 @@ qed
 
 subsection \<open>Top-level: the RCU use-after-free is EXCLUDED over the generated Phi\<close>
 
-text \<open>The top-level exclusion theorem, over the mordor-DERIVED loop future set
+text \<open>The top-level exclusion theorem, over the GENERATED loop future set
   @{term \<Phi>_rcuincreclaim}: NO reachable config of @{term prog_RCU} paired with
   @{term \<Phi>_rcuincreclaim} is an RCU UAF config (free enabled, deref pending).
   Immediate from the (stronger) horizon-level exclusion, which holds at EVERY

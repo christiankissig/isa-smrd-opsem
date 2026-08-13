@@ -6,7 +6,7 @@
    proof in UAF_Bug.thy share one definition of il / ev0 / edge.  An instruction
    "<scope>.<seq>" maps to the iloc with that owner and sequence number
    (loop-free: ilo_loops = []); its leading event-label "<scope>.<seq>#0" is
-   "sub iloc 0".  Init = mordor g, Thr 0 = reclaimer (t0), Thr 1 = reader (t1).
+   "sub iloc 0".  Init = the init scope, Thr 0 = reclaimer (t0), Thr 1 = reader (t1).
 *)
 
 theory UAF_Labels

@@ -8,9 +8,9 @@
    An instruction "<scope>.<seq>" maps to the iloc with that owner and sequence
    number (loop-free: ilo_loops = []); its leading event-label "<scope>.<seq>#0"
    is "sub iloc 0".  A loop-iteration event-label "<scope>.<seq>@<loop>:<iter>#<k>"
-   (MORDOR_ISA_FORMAT.md s2/s4) maps via `ev_it`: the iloc records the enclosing
+   maps via `ev_it`: the iloc records the enclosing
    loop (ilo_loops = [loop]) and the elabel records the iteration (el_iters =
-   [iter]) and the sub-event index (el_k = k).  Init = mordor g.* (the init scope).
+   [iter]) and the sub-event index (el_k = k).  Init = the init scope.
 *)
 
 theory RCU_Labels
@@ -22,7 +22,7 @@ section \<open>Owners, instruction-labels, event-labels, edges\<close>
 definition il :: "owner \<Rightarrow> nat \<Rightarrow> iloc" where
   "il own s = \<lparr> ilo_owner = own, ilo_seq = s, ilo_loops = [] \<rparr>"
 
-text \<open>An instruction-label INSIDE loop @{text lp} (the rolled @{term While} /
+text \<open>An instruction-label INSIDE loop @{text lp} (the nested @{term While} /
   @{term Do} body): same owner / seq, but recording the enclosing loop.\<close>
 definition il_in :: "owner \<Rightarrow> nat \<Rightarrow> loopid \<Rightarrow> iloc" where
   "il_in own s lp = \<lparr> ilo_owner = own, ilo_seq = s, ilo_loops = [lp] \<rparr>"

@@ -4,7 +4,7 @@
     Shared vocabulary for the Episodic-Loops operational semantics: program
     labels (the paper's (pc, loopfun, iter)), memory orders, expressions, the
     abstract action alphabet (what Phi and histories are built on), the abstract
-    command language, and the digested `LABEL is INSTRUCTION` program.  No
+    command language, and the parsed `LABEL is INSTRUCTION` program.  No
     semantics live here -- MemSem owns action effects, EventStruct owns Phi, OpSem
     owns the step relation; all are written against these types.
 
@@ -24,8 +24,8 @@ section \<open>Program labels\<close>
 
 text \<open>The paper's formal label is @{text "(pc(l), loopfun(l), iter(l))"} with
   @{text "pc(l)"} a derived program point, not a hand-coded enum (REWORK sec 4).
-  We split it into a STATIC instruction-label @{text iloc} (the digest key, =
-  mordor @{text "t<tid>.<seq>"} + its enclosing loops) and a DYNAMIC event-label
+  We split it into a STATIC instruction-label @{text iloc} (the key an
+  instruction is stored under: owner, position, enclosing loops) and a DYNAMIC event-label
   @{text elabel} = @{text iloc} + iteration-vector + sub-event index (the key of
   @{text Phi} and histories; an RMW instruction has several event-labels).\<close>
 
@@ -33,8 +33,8 @@ type_synonym tid    = nat
 type_synonym loopid = nat
 type_synonym iter   = nat
 
-text \<open>Who owns an instruction: the thread-less init/preamble (mordor @{text "g.*"})
-  or a thread.\<close>
+text \<open>Who owns an instruction: the thread-less init/preamble or a
+  thread.\<close>
 datatype owner = Init | Thr tid
 
 text \<open>Rank an owner: @{term Init} before all threads, threads by tid.  This is also
@@ -55,7 +55,7 @@ instance
   by intro_classes (auto simp: less_eq_owner_def less_owner_def owner_rank_inj)
 end
 
-text \<open>Static instruction-label = the digest key.  @{text ilo_loops} lists the
+text \<open>Static instruction-label = the key an instruction is stored under.  @{text ilo_loops} lists the
   enclosing loops, innermost LAST (empty outside loops).\<close>
 record iloc =
   ilo_owner :: owner
@@ -131,7 +131,7 @@ section \<open>Memory orders, registers, values, expressions\<close>
 
 datatype mem_order = Rlx | Acq | Rel | Acq_rel | Sc
 
-type_synonym reg  = string   \<comment> \<open>register name (mordor "reg")\<close>
+type_synonym reg  = string   \<comment> \<open>register name\<close>
 type_synonym var  = string   \<comment> \<open>global symbolic variable x (read-var / write-var)\<close>
 type_synonym sym  = nat      \<comment> \<open>symbolic value / symbolic location returned by alloc\<close>
 type_synonym valu = int      \<comment> \<open>concrete integer literal\<close>
@@ -165,9 +165,9 @@ datatype action =
 section \<open>Commands and instructions\<close>
 
 text \<open>One constructor per @{text "rules/commands:*"}, operand-generic (no baked
-  @{text C}/@{text var_s}).  @{text IfElse}/@{text While} keep the program ROLLED:
+  @{text C}/@{text var_s}).  @{text IfElse}/@{text While} keep the program NESTED:
   their bodies are themselves instruction lists.  @{text While} records its
-  @{text loopid} (mordor @{text loop_id}).\<close>
+  @{text loopid}.\<close>
 datatype command =
     Assign   reg expr                                \<comment> \<open>i := e (no event)\<close>
   | ReadVar  mem_order reg var
@@ -195,19 +195,13 @@ fun n_events :: "command \<Rightarrow> nat" where
 | "n_events _                  = 1"
 
 
-section \<open>The digested program\<close>
+section \<open>The parsed program\<close>
 
-text \<open>The whole digest is an instruction list; the @{text owner} in each
+text \<open>A parsed program is an instruction list; the @{text owner} in each
   @{text iloc} separates the init preamble from each thread.\<close>
 type_synonym program = "instr list"
 
-text \<open>The paper's @{text "prog(o)"}: the rolled per-owner command map.\<close>
-definition prog :: "program \<Rightarrow> owner \<Rightarrow> iloc \<rightharpoonup> command" where
-  "prog P own =
-     map_of (map (\<lambda>i. (instr_loc i, instr_cmd i))
-                 (filter (\<lambda>i. ilo_owner (instr_loc i) = own) P))"
-
-text \<open>The readable digest constructor @{text "LABEL is INSTRUCTION"}.  (Spike B
+text \<open>The readable instruction constructor @{text "LABEL is INSTRUCTION"}.  (Spike B
   residual 1, RESOLVED: the @{text "is"} mixfix delimiter parses cleanly in batch
   -- Isar's @{text "is"} is a command-level term-abbreviation keyword, not inner
   term syntax, so it does NOT clash.  The @{text "\<triangleq>"} fallback proved
@@ -220,12 +214,116 @@ lemma is_entry_simps [simp]:
   by (simp_all add: is_entry_def)
 
 
+subsection \<open>The flattened program\<close>
+
+text \<open>A @{typ program} is structured in a syntax tree: an @{term IfElse}
+  / @{term While} instruction carries its branch bodies as nested @{typ "instr
+  list"}s. A nested instruction is not a member of the top-level instruction
+  list, as is missed when indexing instructions on the top-level alone.
+
+  @{term instrs} flattens the @{typ program}, making the individual
+  instructions addressable, even if nested. @{term instrs} references the
+  original instruction and thereby preserves the original structure of the
+  @{typ program}.\<close>
+
+fun instrs :: "program \<Rightarrow> instr list"
+  and instrs_of :: "instr \<Rightarrow> instr list" where
+  "instrs [] = []"
+| "instrs (i # rest) = instrs_of i @ instrs rest"
+| "instrs_of (Instr l (IfElse b tb fb)) =
+     Instr l (IfElse b tb fb) # (instrs tb @ instrs fb)"
+| "instrs_of (Instr l (While lp b body)) =
+     Instr l (While lp b body) # instrs body"
+| "instrs_of (Instr l c) = [Instr l c]"
+
+text \<open>Every instruction addresses itself.\<close>
+lemma instrs_of_self: "i \<in> set (instrs_of i)"
+  by (cases i; rename_tac l c; case_tac c) simp_all
+
+text \<open>Flattening only ADDS entries: the top-level program is always included.\<close>
+lemma set_prog_subset_instrs: "set prg \<subseteq> set (instrs prg)"
+proof (induction prg)
+  case (Cons i prg) show ?case using Cons.IH instrs_of_self[of i] by auto
+qed simp
+
+text \<open>An instruction is NESTED when it carries branch / loop bodies.  A program with
+  no nested bodies is its own flattening -- so replacing @{term "set prg"} by
+  @{term "set (instrs prg)"} anywhere is a CONSERVATIVE change for every loop-free,
+  branch-free program.\<close>
+definition nests :: "instr \<Rightarrow> bool" where
+  "nests i \<longleftrightarrow> (\<exists>b tb fb. instr_cmd i = IfElse b tb fb)
+              \<or> (\<exists>lp b body. instr_cmd i = While lp b body)"
+
+lemma instrs_of_flat: "\<not> nests i \<Longrightarrow> instrs_of i = [i]"
+  by (cases i; rename_tac l c; case_tac c) (simp_all add: nests_def)
+
+lemma instrs_flat: "\<forall>i \<in> set prg. \<not> nests i \<Longrightarrow> instrs prg = prg"
+  by (induction prg) (simp_all add: instrs_of_flat)
+
+
+subsection \<open>The per-owner command map\<close>
+
+text \<open>The paper's @{text "prog(o)"}: look an instruction up by its @{typ iloc}, within
+  one owner's slice of the program.  The lookup ranges over the flattened program, so an
+  instruction nested in a branch body or a loop body is addressable -- exactly the set
+  OpSem's step rules match against.  Over the nested list the two disagreed: a nested
+  label had no entry here even though the rules could fire for it.
+
+  For a program with no nested bodies this is the plain top-level map
+  (@{thm instrs_flat}), so nothing changes for a straight-line program.\<close>
+
+definition prog :: "program \<Rightarrow> owner \<Rightarrow> iloc \<rightharpoonup> command" where
+  "prog P own =
+     map_of (map (\<lambda>i. (instr_loc i, instr_cmd i))
+                 (filter (\<lambda>i. ilo_owner (instr_loc i) = own) (instrs P)))"
+
+text \<open>A successful lookup yields exactly the membership fact the step rules take as
+  their first premise, at the owner that was asked for.\<close>
+lemma prog_SomeD:
+  assumes "prog P own l = Some c"
+  shows "(l is c) \<in> set (instrs P)" and "ilo_owner l = own"
+proof -
+  from assms
+  have "(l, c) \<in> set (map (\<lambda>i. (instr_loc i, instr_cmd i))
+                          (filter (\<lambda>i. ilo_owner (instr_loc i) = own) (instrs P)))"
+    unfolding prog_def by (rule map_of_SomeD)
+  then obtain i where i: "i \<in> set (instrs P)" "ilo_owner (instr_loc i) = own"
+    and il: "instr_loc i = l" and ic: "instr_cmd i = c"
+    by auto
+  have "i = Instr (instr_loc i) (instr_cmd i)" by (cases i) simp
+  with il ic have "i = (l is c)" by (simp add: is_entry_def)
+  with i show "(l is c) \<in> set (instrs P)" by simp
+  from i il show "ilo_owner l = own" by simp
+qed
+
+text \<open>The converse holds for a program whose (flattened) labels are distinct -- the
+  well-formedness a parsed program satisfies, and what makes @{term prog} a
+  faithful inverse of the membership premise rather than merely a first-match lookup.\<close>
+definition distinct_labels :: "program \<Rightarrow> bool" where
+  "distinct_labels P \<longleftrightarrow> distinct (map instr_loc (instrs P))"
+
+lemma prog_SomeI:
+  assumes "distinct_labels P" and "(l is c) \<in> set (instrs P)"
+  shows "prog P (ilo_owner l) l = Some c"
+proof -
+  let ?f = "\<lambda>i. ilo_owner (instr_loc i) = ilo_owner l"
+  let ?xs = "filter ?f (instrs P)"
+  let ?ps = "map (\<lambda>i. (instr_loc i, instr_cmd i)) ?xs"
+  from assms(1) have "distinct (map instr_loc ?xs)"
+    unfolding distinct_labels_def by (rule distinct_map_filter)
+  hence keys: "distinct (map fst ?ps)" by (simp add: comp_def)
+  from assms(2) have "(l is c) \<in> set ?xs" by simp
+  hence "(l, c) \<in> set ?ps" by force
+  from keys this show ?thesis unfolding prog_def by (rule map_of_is_SomeI)
+qed
+
+
 section \<open>Label algebra for loop-boundary detection\<close>
 
 text \<open>The paper orders labels lexicographically over loop indices to detect
   loop-boundary crossings.  We expose the order KEY and the @{text "iter(H)"}
   projection here; @{term okey} is parameterised by the static @{text hdr} table
-  (loop-id to its @{text While} header @{text seq}) extracted once from a digest.
+  (loop-id to its @{text While} header @{text seq}) extracted once from a program.
 
   Two orders coexist by design.  The CANONICAL @{class linorder} on @{typ elabel}
   (above, by @{term elabel_key}) is @{text hdr}-free, total, and good enough for
