@@ -10,15 +10,14 @@
 # names (e.g. `imports "Core.Core"`). The legacy RCU development (MRD_C11_RCU)
 # still needs quick_and_dirty and is built by the `rcu` target.
 #
-# Gate status (2026-06-10): Core, MemSem, OwickiGries, Ownership build clean with
-# NO quick_and_dirty (zero sorry). The Episodic spine above MemSem -- EventStruct,
-# OpSem, and the UAF_Bug client -- still carries TWO documented open sorries, so it
-# does NOT yet pass the strict gate:
+# Gate status (2026-08-12): the WHOLE reworked stack passes the strict gate --
+# `make gate` (clean rebuild, no quick_and_dirty) is green across Core, MemSem,
+# EventStruct, OpSem, OwickiGries, Ownership, Ownership_UAF and both clients, with
+# zero sorry. The two sorries this header used to track are discharged:
 #   * EventStruct.thy  `episodic_single_iteration_window` (finiteness; W8b/OpSem-full)
 #   * UAF_Bug.thy      `uaf_excluded_fixed`               (the handshake-Phi long pole)
-# So `make all` / `make gate` (non-q&d) are EXPECTED to fail on those two until they
-# are discharged -- that is the gate doing its job. Use `make spine` (quick_and_dirty)
-# to compile the spine through the sorries and produce heaps for downstream work.
+# So nothing in the reworked stack needs quick_and_dirty any more; `make spine` is
+# now just a convenience subset build, kept for the shorter edit/compile loop.
 
 ISABELLE ?= isabelle
 
@@ -29,39 +28,44 @@ DIRS := -d Core -d MemSem -d EventStruct -d OpSem -d OwickiGries -d Ownership -d
 # The full reworked stack, leaves last (dependencies build automatically).
 SESSIONS := Core MemSem EventStruct OpSem OwickiGries Ownership Ownership_UAF UAF_Bug RCU_Client
 
-# The mature, genuinely zero-sorry layers (the strict non-q&d gate). The Episodic
-# spine (EventStruct/OpSem/UAF_Bug/RCU_Client) is excluded here because it sits on
-# OpSem, which still carries two documented open sorries; it is compile-checked
-# separately under quick_and_dirty. (RCU_Client itself adds no sorry.)
-CLEAN_SESSIONS := Core MemSem OwickiGries Ownership Ownership_UAF
+# Every session is now zero-sorry, so the strict gate covers the whole stack;
+# CLEAN_SESSIONS is kept as an alias of SESSIONS so existing scripts / CI configs
+# referring to it keep working. SPINE_SESSIONS remains a useful SUBSET for the
+# Episodic spine on its own (a shorter loop while working above MemSem), not a
+# quarantine for unfinished proofs.
+CLEAN_SESSIONS := $(SESSIONS)
 SPINE_SESSIONS := EventStruct OpSem UAF_Bug RCU_Client
+
+# Sessions that carry a document/root.tex and can therefore be presented as PDF.
+# Isabelle does NOT synthesise a root.tex, so a session without one fails the
+# document build; run `isabelle mkroot` in a session dir (and add the resulting
+# `document_files "root.tex"` to its ROOT) to add it to this list.
+DOC_SESSIONS := OwickiGries Ownership
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all core memsem eventstruct opsem og ownership track-a uaf rcu-client spine gate ci rcu legacy dry clean
+.PHONY: help all core memsem eventstruct opsem og ownership track-a uaf rcu-client spine gate ci rcu legacy doc dry clean
 
 help:
 	@echo "rcu-c11-opsem -- Isabelle build targets"
 	@echo
-	@echo "  make all         build the whole reworked stack (non-q&d; fails on the 2 open sorries)"
+	@echo "  make all         build the whole reworked stack (non-q&d, zero sorry)"
 	@echo "  make core        Core        -- shared vocabulary (AFP layer 1)"
 	@echo "  make memsem      MemSem       -- thin SMRD memory semantics (layer 2; needs Core)"
 	@echo "  make eventstruct EventStruct  -- event structures, Phi, horizon (layer 3; needs Core)"
 	@echo "  make opsem       OpSem        -- Episodic step relation (layer 4; needs MemSem+EventStruct)"
 	@echo "  make uaf         UAF_Bug      -- paper UAF client (needs OpSem)"
-	@echo "  make rcu-client  RCU_Client   -- reworked RCU client, data-as-program (needs OpSem; q&d via spine)"
+	@echo "  make rcu-client  RCU_Client   -- reworked RCU client, data-as-program (needs OpSem)"
 	@echo "  make og          OwickiGries -- generic Owicki-Gries framework"
 	@echo "  make ownership   Ownership  -- ownership instantiation (needs OwickiGries); alias: track-a"
 	@echo "  make ownership-uaf Ownership_UAF -- UAF corollary of Ownership, kept out of the AFP entry"
-	@echo "  make spine       EventStruct+OpSem+UAF_Bug WITH quick_and_dirty (WIP route; compiles through sorries)"
-	@echo "  make ci          what CI runs: strict non-q&d gate on the mature layers + q&d compile-check of the spine"
-	@echo "  make gate        from-CLEAN non-q&d rebuild of the WHOLE stack -- the (aspirational) zero-sorry AFP gate"
+	@echo "  make spine       the Episodic spine only (EventStruct+OpSem+both clients) -- shorter edit/compile loop"
+	@echo "  make ci          what CI runs: the strict non-q&d, zero-sorry gate over every session"
+	@echo "  make gate        from-CLEAN non-q&d rebuild of the WHOLE stack -- the zero-sorry AFP gate (green)"
 	@echo "  make rcu         legacy MRD_C11_RCU session (quick_and_dirty)"
+	@echo "  make doc         build the session PDFs ($(DOC_SESSIONS)) into <session>/output/document.pdf"
 	@echo "  make dry         confirm the reworked sessions are up to date (isabelle build -n)"
 	@echo "  make clean       remove editor backups / autosaves / .marks sidecars"
-	@echo
-	@echo "  Open sorries (block the strict gate): EventStruct episodic_single_iteration_window,"
-	@echo "  UAF_Bug uaf_excluded_fixed. make all/gate fail on these by design; make spine builds through."
 	@echo
 	@echo "  Override the prover:  make ISABELLE=/path/to/isabelle <target>"
 
@@ -85,10 +89,8 @@ opsem:
 uaf:
 	$(ISABELLE) build $(DIRS) UAF_Bug
 
-# RCU_Client sits on OpSem (open sorries), so build it through quick_and_dirty like
-# the rest of the spine. RCU_Client adds no sorry of its own.
 rcu-client:
-	$(ISABELLE) build -o quick_and_dirty=true $(DIRS) RCU_Client
+	$(ISABELLE) build $(DIRS) RCU_Client
 
 og:
 	$(ISABELLE) build $(DIRS) OwickiGries
@@ -100,30 +102,40 @@ ownership track-a:
 ownership-uaf:
 	$(ISABELLE) build $(DIRS) Ownership_UAF
 
-# WIP route: compile the Episodic spine through its two open sorries (quick_and_dirty),
-# so downstream work has heaps. Drop this once the sorries are discharged (then it is
-# subsumed by `make all`).
+# The Episodic spine on its own -- a shorter loop when working above MemSem. Subsumed
+# by `make all`; no quick_and_dirty (the spine is zero-sorry like everything else).
 spine:
-	$(ISABELLE) build -o quick_and_dirty=true $(DIRS) $(SPINE_SESSIONS)
+	$(ISABELLE) build $(DIRS) $(SPINE_SESSIONS)
 
-# Enforce the actual acceptance gate: clean build, no quick_and_dirty, zero sorry,
-# across the WHOLE stack. Currently fails on the 2 documented spine sorries by design.
+# The acceptance gate: clean build, no quick_and_dirty, zero sorry, across the WHOLE
+# stack. Green as of 2026-08-12.
 gate:
 	$(ISABELLE) build -c $(DIRS) $(SESSIONS)
 
-# CI gate (used by .github/workflows/build.yml): strict zero-sorry, non-q&d build of
-# the mature layers, PLUS a quick_and_dirty compile-check of the in-progress spine
-# (which still carries 2 documented sorries). Green => mature layers are AFP-clean
-# AND the spine compiles structurally. This stays green while the spine is finished;
-# once its sorries are discharged, fold the spine into the first line and drop this.
+# CI gate (used by .github/workflows/build.yml): the strict zero-sorry, non-q&d build
+# of every session. Green => the whole stack is AFP-clean. (This used to be two lines,
+# the second a quick_and_dirty compile-check of the then-unfinished spine; the spine's
+# sorries are discharged, so the strict build now covers it.)
 ci:
-	$(ISABELLE) build $(DIRS) $(CLEAN_SESSIONS)
-	$(ISABELLE) build -o quick_and_dirty=true $(DIRS) $(SPINE_SESSIONS)
+	$(ISABELLE) build $(DIRS) $(SESSIONS)
 
 # --- legacy RCU development ---------------------------------------------------
 
 rcu legacy:
 	$(ISABELLE) build -o quick_and_dirty=true -v -D . -d c11_opsem MRD_C11_RCU
+
+# --- documentation ------------------------------------------------------------
+
+# Build the LaTeX/PDF presentation of the sessions that have a document/root.tex.
+# Each PDF lands in <session>/output/document.pdf (output/ is gitignored).
+# Needs a LaTeX installation (lualatex, per the default document_build engine).
+# `isabelle document` (rather than `build -o document=pdf`) is used deliberately:
+# it presents from the existing session build instead of being a no-op whenever
+# the heaps are already up to date.
+doc:
+	@for s in $(DOC_SESSIONS); do \
+	    $(ISABELLE) document $(DIRS) -O $$s/output $$s || exit 1; \
+	done
 
 # --- utilities ----------------------------------------------------------------
 
