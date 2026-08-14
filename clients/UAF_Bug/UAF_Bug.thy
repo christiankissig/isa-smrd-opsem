@@ -383,8 +383,8 @@ abbreviation (input) "L5 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0
                              ev0 (g_il 5)}"
 abbreviation (input) "L6 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4),
                              ev0 (g_il 5), ev0 (t0_il 1)}"
-\<comment> \<open>@{text L7} is @{text L6} with the FREE committed -- the history the seventh step
-    produces, at which the deref is still enabled.\<close>
+\<comment> \<open>@{text L7} is @{text L6} with the FREE committed -- the history at which the
+    free has been processed and the deref is still enabled.\<close>
 abbreviation (input) "L7 \<equiv> {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4),
                              ev0 (g_il 5), ev0 (t0_il 1), ev0 (t0_il 3)}"
 
@@ -478,10 +478,10 @@ lemma hist_labels_commit_single:
 lemma hist_labels_empty [simp]: "hist_labels {} = {}"
   by (simp add: hist_labels_def)
 
-text \<open>Now the explicit six-step chain.  Each step is the @{term Step} rule with a
-  single-action command (Malloc / WritePtr / CFence / ReadPtr), whose leading label is
-  in the horizon by @{thm horizon_lbls_chain}.  We track ONLY the history's label set;
-  the @{term \<sigma>} / @{term \<rho>} are threaded existentially.\<close>
+text \<open>Now the explicit chain.  Each step is the @{term Step} rule with a
+  single-action command (Malloc / WritePtr / CFence / ReadPtr / Free), whose leading
+  label is in the horizon by @{thm horizon_lbls_chain}.  We track ONLY the history's
+  label set; the @{term \<sigma>} / @{term \<rho>} are threaded existentially.\<close>
 
 text \<open>The two worker threads never bind the NAME @{text rC} in a register of their
   own: only the init preamble allocates it, publishing it in the shared
@@ -493,10 +493,8 @@ abbreviation (input) "vC_unbound \<rho> \<equiv> rg (\<rho> (Thr 0)) vC = 0 \<an
 lemma reachable_uaf_chain:
   "\<exists>\<sigma> \<rho> H \<sigma>' \<rho>' H'.
       opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>, \<rho>, H) \<and>
-      (step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>, \<rho>, H) \<and>
       hist_labels H = L6 \<and>
       opsem_client.reachable prog_uaf_bug Phi_uaf (\<sigma>', \<rho>', H') \<and>
-      (step prog_uaf_bug Phi_uaf ^^ 7) init_config (\<sigma>', \<rho>', H') \<and>
       hist_labels H' = L7 \<and>
       resolve_loc (\<rho>' (Thr 1)) (EReg vC) \<notin> memory \<sigma>'"
 proof -
@@ -725,24 +723,8 @@ proof -
   qed
   have r7: "R (\<sigma>7, \<rho>7, H7)"
     unfolding R_def using r6[unfolded R_def] s7 by (rule opsem_client.reachable_step)
-  \<comment> \<open>The SAME chain, counted: exactly six @{term step} applications reach the UAF
-      config, as a machine-checked relation-power fact @{text "step ^^ 6"}.\<close>
-  have p0: "(step prog_uaf_bug Phi_uaf ^^ 0) init_config init_config" by simp
-  have p6suc: "(step prog_uaf_bug Phi_uaf ^^ Suc (Suc (Suc (Suc (Suc (Suc 0))))))
-                 init_config (\<sigma>6, \<rho>6, H6)"
-    by (rule relpowp_Suc_I[OF relpowp_Suc_I[OF relpowp_Suc_I[OF relpowp_Suc_I[OF
-            relpowp_Suc_I[OF relpowp_Suc_I[OF p0 s1] s2] s3] s4] s5] s6])
-  have six: "(6::nat) = Suc (Suc (Suc (Suc (Suc (Suc 0)))))" by simp
-  have p6: "(step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>6, \<rho>6, H6)"
-    unfolding six by (rule p6suc)
-  have p7suc: "(step prog_uaf_bug Phi_uaf ^^ Suc (Suc (Suc (Suc (Suc (Suc (Suc 0)))))))
-                 init_config (\<sigma>7, \<rho>7, H7)"
-    by (rule relpowp_Suc_I[OF p6suc s7])
-  have seven: "(7::nat) = Suc (Suc (Suc (Suc (Suc (Suc (Suc 0))))))" by simp
-  have p7: "(step prog_uaf_bug Phi_uaf ^^ 7) init_config (\<sigma>7, \<rho>7, H7)"
-    unfolding seven by (rule p7suc)
   show ?thesis
-    using r6[unfolded R_def] p6 h6 r7[unfolded R_def] p7 h7 freed7 by blast
+    using r6[unfolded R_def] h6 r7[unfolded R_def] h7 freed7 by blast
 qed
 
 text \<open>The horizon facts depend only on a history's LABEL set, so the chain's final
@@ -789,29 +771,6 @@ proof -
   with reach show ?thesis by blast
 qed
 
-text \<open>The DERIVATION-LENGTH refinement of @{thm uaf_reachable_bug}: the UAF config
-  is reached in EXACTLY SIX applications of the operational-semantics @{term step}
-  relation (each an instance of the single @{text Step} rule), out of the
-  nine-instruction program @{term prog_uaf_bug}.  The count @{text 6} is
-  kernel-checked here via the relation power @{text "step ^^ 6"} -- a concrete,
-  machine-verified complexity figure for the paper's headline example.\<close>
-theorem uaf_reached_in_6_steps:
-  "\<exists>cfg. (step prog_uaf_bug Phi_uaf ^^ 6) init_config cfg \<and>
-         uaf_config Phi_uaf bug_free_il bug_deref_il cfg"
-proof -
-  from reachable_uaf_chain obtain \<sigma> \<rho> H where
-    pw: "(step prog_uaf_bug Phi_uaf ^^ 6) init_config (\<sigma>, \<rho>, H)"
-    and hl: "hist_labels H = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3),
-                              ev0 (g_il 4), ev0 (g_il 5), ev0 (t0_il 1)}"
-    by blast
-  have eq: "hist_labels H = hist_labels uaf_witness_H"
-    by (simp add: hl hist_labels_uaf_witness)
-  have "uaf_config Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
-    unfolding uaf_config_def
-    using free_enabled_of_labels[OF eq] deref_pending_of_labels[OF eq] by simp
-  with pw show ?thesis by blast
-qed
-
 text \<open>The program has nine instructions, so the derivation is strictly shorter than
   the program is long -- a linear (indeed sub-length) bound for this example.\<close>
 lemma prog_uaf_bug_length: "length prog_uaf_bug = 9"
@@ -852,26 +811,10 @@ proof -
   with reach show ?thesis by blast
 qed
 
-text \<open>Its derivation-length refinement: SEVEN @{term step} applications -- the six that
-  reach the precursor state, plus the one that processes the free.\<close>
-theorem uaf_realised_in_7_steps:
-  "\<exists>cfg. (step prog_uaf_bug Phi_uaf ^^ 7) init_config cfg \<and>
-         uaf_realised Phi_uaf bug_free_il bug_deref_il cfg"
-proof -
-  from reachable_uaf_chain obtain \<sigma> \<rho> H where
-    pw: "(step prog_uaf_bug Phi_uaf ^^ 7) init_config (\<sigma>, \<rho>, H)"
-    and hl: "hist_labels H = L7"
-    by blast
-  have "uaf_realised Phi_uaf bug_free_il bug_deref_il (\<sigma>, \<rho>, H)"
-    unfolding uaf_realised_def bug_free_il_def bug_deref_il_def
-    using hl horizon_lbls_deref_after_free[OF hl] by simp
-  with pw show ?thesis by blast
-qed
-
 text \<open>The realised UAF is a strictly LATER state than the precursor: the free is no
   longer merely enabled but committed, so @{term uaf_config} (which requires the
   deref pending) and @{term uaf_realised} are not the same predicate.  Both hold of
-  the bug, six and seven steps in respectively.\<close>
+  the bug, the precursor along the way to the realised UAF.\<close>
 
 text \<open>Finally the MEMORY-STATE reading of the same configuration, which owes nothing
   to @{typ Phi}: the location the reader resolves @{text rC} to is not in
@@ -1140,8 +1083,131 @@ text \<open>NOTE (faithfulness / non-weakening).  The provisional single-program
   horizon-enabled with the deref pending at the reachable @{term fix_bad_H}.  The
   theorem is therefore stated over @{term Phi_uaf_fixed_hs}, the future set that
   faithfully carries the release/acquire synchronizes-with the fixed program
-  establishes.  The statement is NOT weakened to force a green build: the
-  @{term uaf_config} / @{term reachable} predicates are the same ones used for the
-  bug's reachability result, applied to the correctly-modelled Phi.\<close>
+  establishes.
+
+  The statement is NOT weakened to force a green build: the @{term uaf_config} and
+  @{term reachable} predicates are the same ones used for the bug's reachability
+  result, applied to the correctly-modelled Phi.  The same holds of the exclusion in
+  the next subsection: @{term uaf_realised} there is exactly the predicate proved
+  REACHABLE for the bug in @{text uaf_realised_bug}.\<close>
+
+
+subsection \<open>The fix excludes the REALISED use-after-free too\<close>
+
+text \<open>@{term uaf_config} above rules out the precursor: the free enabled while the
+  deref is pending.  The safety property the fixed program really owes is the
+  exclusive one over @{term uaf_realised} -- the free COMMITTED and the deref
+  ENABLED must never hold together.  Either may hold on its own; both at once is the
+  use-after-free.
+
+  Unlike @{thm uaf_config_excluded_fixed_hs_horizon}, this cannot be established at
+  EVERY config.  Take the history whose labels are @{text "{g.1#0..g.5#0, t0.3#0}"} --
+  the free committed with nothing of the reader or the reclaimer's read.  The
+  free-free execution @{term Phi_uaf_fixed_hs_exec0} does not contain @{text
+  "t0.3#0"} at all, so @{term consistent} constrains nothing about it and exec0 stays
+  live; and the deref's only predecessors there are the init labels, so it is
+  enabled.  Both conjuncts hold.  That history is of course not reachable -- no step
+  could have committed the free -- which is exactly the point: the property is a
+  fact about REACHABLE configurations, and its proof must go through the operational
+  semantics rather than the horizon alone.
+
+  This is a DIFFERENT limitation from the one recorded above, and the two should not
+  be read as one recurring weakness.  @{text uaf_config_fixed_horizon_counterexample}
+  is about the provisional Phi lacking the handshake edge, and the enrichment cures
+  it.  The counter-fact here holds even over the enriched @{term Phi_uaf_fixed_hs}:
+  it reflects @{term consistent} ignoring committed labels that a future does not
+  mention, so a future in which the free does not occur survives a history that has
+  committed it.  Restricting to reachable configurations is what cures this one.\<close>
+
+lemma uaf_realised_fixed_horizon_counterexample:
+  assumes "hist_labels H = {ev0 (g_il 1), ev0 (g_il 2), ev0 (g_il 3), ev0 (g_il 4),
+                            ev0 (g_il 5), ev0 (t0_il 3)}"
+  shows "uaf_realised Phi_uaf_fixed_hs fix_free_il fix_deref_il (\<sigma>, \<rho>, H)"
+proof -
+  have "consistent Phi_uaf_fixed_hs_exec0 H"
+    unfolding consistent_def assms
+    by (simp add: Phi_uaf_fixed_hs_exec0_def \<Phi>_uaf_bug_fixed_exec0_def
+                   future_labels_def ev0_eq_iff)
+  moreover have "ev0 (t1_il 1) \<in> enabled_in Phi_uaf_fixed_hs_exec0 H"
+    unfolding enabled_in_def assms
+    by (simp add: Phi_uaf_fixed_hs_exec0_def \<Phi>_uaf_bug_fixed_exec0_def
+                   future_labels_def ev0_eq_iff)
+  moreover have "Phi_uaf_fixed_hs_exec0 \<in> Phi_uaf_fixed_hs"
+    by (simp add: Phi_uaf_fixed_hs_def \<Phi>_uaf_bug_fixed_def
+                  Phi_uaf_fixed_hs_exec0_def)
+  ultimately show ?thesis
+    unfolding uaf_realised_def fix_free_il_def fix_deref_il_def
+    using assms by (auto simp: horizon_lbls_def ev0_eq_iff)
+qed
+
+text \<open>The invariant that carries the property: in the fixed program, a REACHABLE
+  history containing the free contains the deref as well.  The step that committed
+  the free had to pass the horizon gate (@{thm step_new_label_horizon}), and
+  @{thm uaf_config_excluded_fixed_hs_horizon} says a horizon-enabled free forces the
+  deref to be committed already.  Histories only grow, so the deref stays.\<close>
+lemma deref_committed_of_free_committed:
+  assumes "opsem_client.reachable prog_uaf_fixed Phi_uaf_fixed_hs cfg"
+  shows "ev0 fix_free_il \<in> hist_labels (snd (snd cfg)) \<longrightarrow>
+         ev0 fix_deref_il \<in> hist_labels (snd (snd cfg))"
+proof (rule opsem_client.reachable_induct[OF assms])
+  show "ev0 fix_free_il \<in> hist_labels (snd (snd init_config)) \<longrightarrow>
+        ev0 fix_deref_il \<in> hist_labels (snd (snd init_config))"
+    by (simp add: init_config_def)
+next
+  fix c c'
+  assume st: "step prog_uaf_fixed Phi_uaf_fixed_hs c c'"
+    and IH: "ev0 fix_free_il \<in> hist_labels (snd (snd c)) \<longrightarrow>
+             ev0 fix_deref_il \<in> hist_labels (snd (snd c))"
+  obtain \<sigma>0 \<rho>0 H0 where c: "c = (\<sigma>0, \<rho>0, H0)" by (cases c) auto
+  obtain \<sigma>' \<rho>' H' where c': "c' = (\<sigma>', \<rho>', H')" by (cases c') auto
+  from st c c' have st': "step prog_uaf_fixed Phi_uaf_fixed_hs
+                              (\<sigma>0, \<rho>0, H0) (\<sigma>', \<rho>', H')" by simp
+  show "ev0 fix_free_il \<in> hist_labels (snd (snd c')) \<longrightarrow>
+        ev0 fix_deref_il \<in> hist_labels (snd (snd c'))"
+  proof (unfold c', simp only: snd_conv, intro impI)
+    assume free': "ev0 fix_free_il \<in> hist_labels H'"
+    show "ev0 fix_deref_il \<in> hist_labels H'"
+    proof (cases "ev0 fix_free_il \<in> hist_labels H0")
+      case True
+      with IH c have "ev0 fix_deref_il \<in> hist_labels H0" by simp
+      with step_hist_mono[OF st'] show ?thesis by blast
+    next
+      case False
+      \<comment> \<open>the free was committed BY this step, so it was in the horizon before it\<close>
+      from step_new_label_horizon[OF st' free' False]
+      have "ev0 fix_free_il \<in> horizon_lbls Phi_uaf_fixed_hs H0"
+        by (simp add: ev0_def sub_def)
+      hence "free_enabled Phi_uaf_fixed_hs fix_free_il H0"
+        by (simp add: free_enabled_def)
+      hence "\<not> deref_pending fix_deref_il H0"
+        using uaf_config_excluded_fixed_hs_horizon by (auto simp: uaf_config_def)
+      hence "ev0 fix_deref_il \<in> hist_labels H0"
+        by (simp add: deref_pending_def)
+      with step_hist_mono[OF st'] show ?thesis by blast
+    qed
+  qed
+qed
+
+text \<open>The safety property: no reachable configuration of the fixed program has the
+  free committed AND the deref enabled.  The two are mutually exclusive -- the free
+  may have happened, or the deref may be about to, never both.\<close>
+theorem uaf_realised_excluded_fixed:
+  "\<not> (\<exists>cfg. opsem_client.reachable prog_uaf_fixed Phi_uaf_fixed_hs cfg \<and>
+            uaf_realised Phi_uaf_fixed_hs fix_free_il fix_deref_il cfg)"
+proof (rule notI, elim exE conjE)
+  fix cfg
+  assume reach: "opsem_client.reachable prog_uaf_fixed Phi_uaf_fixed_hs cfg"
+    and uaf: "uaf_realised Phi_uaf_fixed_hs fix_free_il fix_deref_il cfg"
+  obtain \<sigma> \<rho> H where cfg: "cfg = (\<sigma>, \<rho>, H)" by (cases cfg) auto
+  from uaf cfg have free: "ev0 fix_free_il \<in> hist_labels H"
+    and deref: "ev0 fix_deref_il \<in> horizon_lbls Phi_uaf_fixed_hs H"
+    by (simp_all add: uaf_realised_def)
+  from deref_committed_of_free_committed[OF reach] free cfg
+  have "ev0 fix_deref_il \<in> hist_labels H" by simp
+  moreover from deref have "ev0 fix_deref_il \<notin> hist_labels H"
+    by (rule horizon_lbls_not_committed)
+  ultimately show False by contradiction
+qed
+
 
 end
