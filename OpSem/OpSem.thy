@@ -406,6 +406,56 @@ where
 text \<open>Sanity: the rules are @{text Step}, @{text Then}, @{text Else}, and the W8b
   loop rules @{text Loop} / @{text LoopExit} (the @{text lb}-reset, single-window).\<close>
 
+subsection \<open>Histories are horizon-generated\<close>
+
+text \<open>Every label a command emits carries that command's own instruction-label: the
+  emitted labels are the sub-events @{text "l#0 .. l#(n-1)"} of the instruction at
+  @{term l}, and nothing else.\<close>
+lemma cmd_effect_iloc:
+  assumes "cmd_effect casok l c \<rho> = Some (abar, las, \<rho>t')"
+    and "(lb, a) \<in> set las"
+  shows "el_iloc lb = l"
+  using assms
+  by (cases c)
+     (auto simp: Let_def sub_def faa_actions_def cas_actions_def next_sym_def
+           split: if_splits prod.splits)
+
+lemma hist_labels_commit_events:
+  "hist_labels (commit_events las H) = hist_labels H \<union> set (map fst las)"
+  by (simp add: commit_events_def hist_labels_def ev_label_def image_Un)
+
+text \<open>A step only ever ADDS to the history.\<close>
+lemma step_hist_mono:
+  assumes "step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>', H')"
+  shows "hist_labels H \<subseteq> hist_labels H'"
+  using assms by (cases rule: step.cases) (auto simp: hist_labels_commit_events)
+
+text \<open>The gate every committed label passed: a label that a step ADDS to the history
+  belongs to an instruction whose leading label was in the horizon beforehand.  So a
+  history never contains a label the horizon did not admit -- the operational
+  counterpart of @{term horizon_lbls} being the only way Phi is consumed.\<close>
+lemma step_new_label_horizon:
+  assumes "step prg Phi (\<sigma>, \<rho>, H) (\<sigma>', \<rho>', H')"
+    and "l \<in> hist_labels H'" and "l \<notin> hist_labels H"
+  shows "sub (el_iloc l) 0 \<in> horizon_lbls Phi H"
+  using assms
+proof (cases rule: step.cases)
+  case (Step il c casok abar las \<rho>t')
+  from Step assms(2,3) obtain a where "(l, a) \<in> set las"
+    by (auto simp: hist_labels_commit_events)
+  with Step have "el_iloc l = il" by (auto dest: cmd_effect_iloc)
+  with Step show ?thesis
+    by (simp add: in_horizon_def horizon_label_def instr_sublabel_def sub_def)
+qed (use assms(2,3) in
+     \<open>auto simp: hist_labels_commit_events in_horizon_def horizon_label_def
+                 instr_sublabel_def sub_def\<close>)
+
+text \<open>A horizon label is by construction NOT yet committed.\<close>
+lemma horizon_lbls_not_committed:
+  "l \<in> horizon_lbls Phi H \<Longrightarrow> l \<notin> hist_labels H"
+  by (auto simp: horizon_lbls_def enabled_in_def)
+
+
 text \<open>Stepping keeps the global components global: @{text Step} writes them back with
   @{term publish}, and the guard rules leave @{term \<rho>} alone.  So all owners always
   agree on the location map and the symbol counter.\<close>
