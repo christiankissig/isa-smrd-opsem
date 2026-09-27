@@ -3,7 +3,7 @@
 **Status:** v0.1 — **implemented in mordor and conformance-passing (2026-06-07).** mordor's
 `isa` output mode (`src/isa_export.ml`) now emits this schema; verified against
 `uaf-bug{,-fixed}.lit` (structure + bug/fix discriminating edge) and `cas_aba.lit` (RMW
-sub-events + loop-iteration suffixes). This spec is a **deliverable of `rcu-c11-opsem`** and the
+sub-events + loop-iteration suffixes). This spec is a **deliverable of `isa-smrd-opsem`** and the
 **contract** for that output. See `REWORK_PLAN.md` §5 (interchange format), Decision 8, W15,
 §4 Q1–Q5. v0.2 refinements + RCU validation pending in **Spike B**.
 

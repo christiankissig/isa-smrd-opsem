@@ -1,4 +1,4 @@
-# Makefile for rcu-c11-opsem
+# Makefile for isa-smrd-opsem
 #
 # Requires Isabelle2025-vsce (the isabelle-emacs fork) for interactive work, but
 # the reworked layers also build on the OFFICIAL Isabelle2025 (see CI). Override
@@ -47,7 +47,7 @@ DOC_SESSIONS := OwickiGries Ownership
 .PHONY: help all core memsem eventstruct opsem og ownership track-a uaf rcu-client spine gate ci rcu legacy doc dry clean
 
 help:
-	@echo "rcu-c11-opsem -- Isabelle build targets"
+	@echo "isa-smrd-opsem -- Isabelle build targets"
 	@echo
 	@echo "  make all         build the whole reworked stack (non-q&d, zero sorry)"
 	@echo "  make core        Core        -- shared vocabulary (AFP layer 1)"

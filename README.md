@@ -1,6 +1,6 @@
-# rcu-c11-opsem
+# isa-smrd-opsem
 
-[![build](https://github.com/christiankissig/rcu-c11-opsem/actions/workflows/build.yml/badge.svg)](https://github.com/christiankissig/rcu-c11-opsem/actions/workflows/build.yml)
+[![build](https://github.com/christiankissig/isa-smrd-opsem/actions/workflows/build.yml/badge.svg)](https://github.com/christiankissig/isa-smrd-opsem/actions/workflows/build.yml)
 
 Isabelle/HOL formal verification that the **RCU** (Read-Copy-Update) algorithm has
 **no use-after-free** under a **C11 weak-memory operational semantics** with the
