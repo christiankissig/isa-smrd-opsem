@@ -18,22 +18,6 @@ earlier monolithic proof that encoded futures as an
 enumerated datatype (which exploded the proof goals); that legacy development has been
 retired.
 
-## Status
-
-The whole reusable spine builds **zero `sorry`** under the strict AFP gate
-(`make gate`: a from-clean rebuild with **no** `quick_and_dirty`).
-
-| Layer / session | State |
-|---|---|
-| **OwickiGries + Ownership** (AFP-bound) | ✅ **proven**, zero `sorry`, non-`quick_and_dirty`; AFP metadata finalised, PDFs render |
-| **Core** (labels, actions, commands, digest) | ✅ built, zero `sorry` |
-| **MemSem** (thin SMRD σ + action effects) | ✅ built, zero `sorry` |
-| **EventStruct** (ppo, DP, Φ, horizon, episodicity) | ✅ built, zero `sorry` |
-| **OpSem** (command→action rules, `step prog Φ`) | ✅ built, zero `sorry` |
-| **UAF_Bug** client (paper's minimal bug/fix) | ✅ `uaf_reachable_bug` **proven**; `uaf_excluded_fixed` **proven** over a handshake-enriched Φ (see caveat) |
-| **RCU_Client** (`prog_RCU` as program-as-data over Core) | ✅ built; loop-free fragment only — **no end-to-end no-UAF theorem yet** |
-| Legacy RCU proofs (`MRD_C11_RCU`) | 🗄️ **retired** (deleted); only the generated mordor digests survive |
-
 ## Architecture
 
 Bottom-up; each reusable layer (★ = AFP-candidate) imports only layers below it.
