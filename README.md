@@ -112,9 +112,7 @@ The future set Φ is computed by the **MoRDor** weak memory explorer
 `scripts/generate_phi.py` consumes that JSON and emits an Isabelle theory containing (1) the
 digested program as `LABEL is INSTRUCTION` entries, and (2) the future set as a concrete constant
 `Φ_<prog>` — a set of edge-sets over event-labels, one set per execution (the renderer adds the
-reflexive closure MoRDor omits). The Isabelle-specific notation lives in this renderer, so MoRDor
-stays prover-agnostic. The validated UAF bridge artifacts live under
-`workspace/spikes/uaf-bridge/`.
+reflexive closure MoRDor omits).
 
 ## Documentation
 
