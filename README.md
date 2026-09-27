@@ -43,9 +43,7 @@ Full rationale in [`docs/W1_owicki_gries_design.md`](docs/W1_owicki_gries_design
 
 Requires **Isabelle2025** (or newer) — the official release from
 <https://isabelle.in.tum.de> — with a built `HOL` heap (`isabelle build -b HOL`). This is what
-CI uses (`make ci`); no fork is needed. (The [isabelle-emacs](https://github.com/m-fleury/isabelle-emacs)
-/ `-vsce` fork still works for interactive development, but is optional.) Theory sources use
-ASCII Isabelle symbol notation (`\<forall>`, `\<open>…\<close>`), not raw Unicode glyphs.
+CI uses (`make ci`). Theory sources use ASCII Isabelle symbol notation (`\<forall>`, `\<open>…\<close>`), not raw Unicode glyphs.
 
 ```bash
 make all         # build the whole reworked stack (non-q&d): Core, MemSem,
