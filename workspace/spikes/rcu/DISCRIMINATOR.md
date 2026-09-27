@@ -1,6 +1,6 @@
 # RCU bug/fix safety-edge discriminator (Spike A-RCU)
 
-Date: 2026-06-09. Relates to REWORK_PLAN.md §5 / Spike A-RCU.
+Date: 2026-06-09. Spike A-RCU.
 
 Goal: check that the RCU no-use-after-free safety edge (the I6 release on the
 exit write `*(rrcu + rtid) := 0`) behaves like the paper's UAF discriminator

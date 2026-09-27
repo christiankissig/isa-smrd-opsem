@@ -16,7 +16,7 @@ begin
 section \<open>Use-after-free safety (the paper's corollary)\<close>
 
 text \<open>The paper's Hoare rules instantiate as follows (informally; the concrete
-  RCU program is supplied by the client in Phase 6):
+  RCU program is supplied by the RCU client):
 
   \<^item> rcu-exit  @{text "{} t2: rcu[t2]:=\<^sup>rel 0 {t2 \<notin> own(s)}"} :
                 @{text "s \<in> releases a"}, post @{term "NotOwns t2 s"};

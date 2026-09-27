@@ -25,14 +25,13 @@ The whole reusable spine builds **zero `sorry`** under the strict AFP gate
 
 | Layer / session | State |
 |---|---|
-| **OwickiGries + Ownership** (Track A — first AFP target) | ✅ **proven**, zero `sorry`, non-`quick_and_dirty`; AFP metadata finalised, PDFs render |
+| **OwickiGries + Ownership** (AFP-bound) | ✅ **proven**, zero `sorry`, non-`quick_and_dirty`; AFP metadata finalised, PDFs render |
 | **Core** (labels, actions, commands, digest) | ✅ built, zero `sorry` |
 | **MemSem** (thin SMRD σ + action effects) | ✅ built, zero `sorry` |
 | **EventStruct** (ppo, DP, Φ, horizon, episodicity) | ✅ built, zero `sorry` |
 | **OpSem** (command→action rules, `step prog Φ`) | ✅ built, zero `sorry` |
 | **UAF_Bug** client (paper's minimal bug/fix) | ✅ `uaf_reachable_bug` **proven**; `uaf_excluded_fixed` **proven** over a handshake-enriched Φ (see caveat) |
 | **RCU_Client** (`prog_RCU` as program-as-data over Core) | ✅ built; loop-free fragment only — **no end-to-end no-UAF theorem yet** |
-| `Φ_RCU` generation (mordor bridge) | ⏳ open: derive the cross-thread handshake edge in the generator; drive the full multi-thread Φ to termination |
 | Legacy RCU proofs (`MRD_C11_RCU`) | 🗄️ **retired** (deleted); only the generated mordor digests survive |
 
 ## Architecture
@@ -47,7 +46,7 @@ MemSem ★      σ = (viswrite, memory, φ, RF) + action effects σ ⤳ₜ σ'  
 EventStruct ★ ppo, DP, executions, futures Φ, histories, horizonΦ_H, episodicity.
 OpSem ★       command→action rules + inductive `step prog Φ`; client locale.
 
-OwickiGries ★ + Ownership ★   — INDEPENDENT vertical (1st AFP target):
+OwickiGries ★ + Ownership ★   — INDEPENDENT vertical (AFP-bound):
               generic Owicki-Gries over an abstract transition system + soundness,
               with Ownership as a concrete instantiation (ownership ⟹ non-interference,
               use-after-free safety).  Depends only on HOL.
@@ -107,8 +106,8 @@ clients/UAF_Bug/   minimal use-after-free example (paper's headline)
 clients/RCU/       RCU_Client.thy (program-as-data) + generated mordor digests + ROOT
 c11_opsem/         base C11 memory model (formerly a git submodule; now in-tree)
 scripts/           Φ generators (generate_phi.py)
-workspace/         non-source artifacts: spikes/ (mordor→Φ bridge), snapshots/, scratch/
-docs/              SPIKE_*, W1 design, MORDOR_ISA_FORMAT, PARALLEL_WORKSTREAMS
+workspace/         non-source artifacts: spikes/ (mordor→Φ bridge)
+docs/              SPIKE_*, W1 design, MORDOR_ISA_FORMAT
 ROOT               legacy session MRD_C11_RCU (builds only the surviving digests)
 Makefile           build targets (above)
 ```
@@ -148,23 +147,12 @@ whose writer `W` is a release-class write, it adds `W → R`, joining the execut
 event-ids to the isa event-labels. This is execution-faithful (it uses mordor's computed `rf`, not
 a structural guess) and selects exactly the synchronizing subset — the buggy variant's exit write
 is relaxed, so it gains no edge and stays reachable. On the UAF fixtures this reproduces precisely
-`t1.3#0 → t0.1#0` for the fixed program (in the freeing execution) and nothing for the bug. The
-remaining theory-side step is to consume this generated Φ directly in `UAF_Bug.thy` (it currently
-hand-defines the same edge over Core types). Driving the full multi-thread `Φ_RCU` to termination
-remains the other open task.
+`t1.3#0 → t0.1#0` for the fixed program (in the freeing execution) and nothing for the bug. `UAF_Bug.thy`
+currently defines the same edge by hand over Core types.
 
 ## Documentation
 
-- [`docs/PARALLEL_WORKSTREAMS.md`](docs/PARALLEL_WORKSTREAMS.md) — workstream breakdown + dependency cut + status.
 - [`docs/W1_owicki_gries_design.md`](docs/W1_owicki_gries_design.md) — the Owicki-Gries / Ownership design.
 - [`docs/MORDOR_ISA_FORMAT.md`](docs/MORDOR_ISA_FORMAT.md) — the mordor↔Isabelle interchange format.
 - `docs/SPIKE_{B,C,D}*` — label-digest, SMRD MemSem, and triage design notes.
 
-## What remains
-
-The reusable spine and both AFP-bound vertical entries are complete and zero-`sorry`. The
-RCU end-to-end no-use-after-free theorem is still open; it needs (1) the handshake edge derived
-in the generator (above), (2) the OpSem loop / `lb`-reset rule so `prog_RCU`'s `While` bodies
-step, and (3) the full multi-thread `Φ_RCU`.
-</content>
-</invoke>

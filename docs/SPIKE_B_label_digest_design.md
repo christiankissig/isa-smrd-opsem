@@ -1,8 +1,8 @@
 # Spike B — Core label/digest interface freeze
 
 **Status:** proposed freeze, 2026-06-07. Unblocks `Core`, `EventStruct`, `OpSem`
-(REWORK_PLAN §4 "Abstract command/action granularity", §5 interchange format, §8
-interface freezes). Resolves §4 open questions **Q1, Q2, Q4, Q5** and pins **Q2** of
+(abstract command/action granularity, the interchange format, interface freezes).
+Resolves the open questions **Q1, Q2, Q4, Q5** on command/action granularity and pins **Q2** of
 `docs/MORDOR_ISA_FORMAT.md`. Inputs: paper `app-opsem.tex` / `app-defs.tex` +
 `rules/{actions,commands,step}:*`, and the implemented `isa` outputs
 (`workspace/spikes/uaf-bridge/{uaf,uaf_fixed,cas_aba}_isa.json`).
@@ -217,7 +217,7 @@ Notes:
   appendix): `Faa → [Read o_r x α, Write o_w x n]`; `Cas`-success →
   `[Read o_r x α, Branch (α=⟦e_s⟧), Write o_w x n]` (guard `α ≡_{σ.φ} ⟦e_s⟧`); `Cas`-failure →
   `[Read o_r x α, Branch (α=⟦e_s⟧)]`, **acquire-only on `o_r`, no release** (paper §sec:cas,
-  the asymmetry that admits the reorder — MemSem/OpSem job, REWORK §2 Q4). Proved **once**,
+  the asymmetry that admits the reorder — MemSem/OpSem job). Proved **once**,
   not per PC.
 - `ReadRef` and `Set` emit **no** action (`events: []` in the isa output — cf. `cas_aba`
   `t0.1` Set), so they step `σ` unchanged and only update `ρ`.
@@ -352,7 +352,7 @@ restricted to that loop (`·|^t_{∖loopfun(l)}`), and re-bases the label to the
 
 This is a *design*, not a proof: the obligation `EventStruct`/`OpSem` must discharge is that
 `iter_H`/`okey` make the `lb` rule fire exactly at mordor's unrolled iteration boundaries
-(a regression `value`-check against the RCU `isa` Φ, per REWORK §9).
+(a regression `value`-check against the RCU `isa` Φ).
 
 ---
 
@@ -363,7 +363,7 @@ This is a *design*, not a proof: the obligation `EventStruct`/`OpSem` must disch
 
 Rationale, now that `isa` exists:
 - **Trusted base stays small & the digest stays auditable.** The digest is the *readable
-  specification* of the client program (REWORK §4 goal). Hand-authoring keeps mordor's parser
+  specification* of the client program. Hand-authoring keeps mordor's parser
   out of the trusted base for the program text, and keeps the Isabelle readable (a generated
   digest risks the "ugly, hard-to-audit Isabelle" of Q1).
 - **`isa` removes the drift risk for free.** Because the schema now carries the full structured
@@ -371,7 +371,7 @@ Rationale, now that `isa` exists:
   against it — a conformance test that the hand digest's
   `{(iloc, command-shape, loops)}` set equals the rendered `isa` document. This is the best of
   both: auditable source **and** a machine guarantee it matches mordor's parse.
-- **Φ is always generated** (`scripts/generate_phi.py`, REWORK §5): it is large, unreadable,
+- **Φ is always generated** (`scripts/generate_phi.py`): it is large, unreadable,
   and not meant to be inspected; it carries a provenance header.
 
 Concretely:

@@ -2,7 +2,7 @@
 
 Date: 2026-06-07 (sc=1 on rcu-1/rcu-3); **updated 2026-06-09** (iter-labels validated on a
 minimal retry-loop fixture — see "Resolution" below).
-Relates to REWORK_PLAN.md §5 (v0.2 open item: RCU loops/iter on a real retry loop).
+Relates to the v0.2 open item of `docs/MORDOR_ISA_FORMAT.md`: RCU loops/iter on a real retry loop.
 
 mordor binary: `/home/christian/workspace/mordor/_build/default/cli/main.exe`
 Inputs: `programs/rcu-1.lit` (single thread), `programs/rcu-3.lit` (3 threads, `|||`-separated),
@@ -118,7 +118,7 @@ The program is emitted **rolled** as a statement tree. Each statement node:
 
 ### The `@loop:iter` label form (NOT seen on RCU, but real)
 
-REWORK_PLAN §5 expects loop-iteration labels of the form `t0.7@1:1#2`
+`docs/MORDOR_ISA_FORMAT.md` specifies loop-iteration labels of the form `t0.7@1:1#2`
 (= `t<tid>.<stmt>@<loop_id>:<iter>#<event>`). These are emitted **only on event labels of events
 that are both inside a loop AND referenced by a future edge**. In both RCU `isa` outputs the
 character `@` appears **0 times**, because no RCU future edge reaches a loop-body event at sc=1.

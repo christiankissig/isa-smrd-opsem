@@ -10,7 +10,6 @@ prog, Φ ⊢ (σ, ρ, H) → (σ', ρ', H')
 
 with the four future-stepping rules (non-lb/non-branch, lb-with-reset, then, else) and a
 **client locale** (`fixes prog Φ`). Clients (`clients/UAF_Bug`, `clients/RCU`) are
-interpretations. *(Stretch: finiteness/soundness/completeness meta-theorems.)*
+interpretations.
 
-**Status:** to be built fresh (REWORK_PLAN.md → Phase 3). Empty scaffolding.
-AFP submission **undecided** (on the fence) — keep AFP-capable but uncommitted.
+**Status:** built, zero `sorry`.

@@ -1,7 +1,7 @@
 # Spike A / W3 — mordor → Φ bridge (UAF example) — VALIDATED 2026-06-07
 
 Validates the pipeline that turns a mordor analysis into a labelled future set Φ, on the
-paper's minimal use-after-free example. See REWORK_PLAN.md → §5.
+paper's minimal use-after-free example. See `docs/MORDOR_ISA_FORMAT.md`.
 
 ## Commands (mordor at /home/christian/workspace/mordor)
 ```

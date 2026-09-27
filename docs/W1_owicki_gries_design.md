@@ -19,8 +19,8 @@ fix, not a workaround):
    the RCU client supplies `proc`.
 
 Original design follows.
-**Scope:** REWORK_PLAN.md §1 (the independent OG+Ownership vertical), §3 (AFP
-requirements + decoupling), Decision 7, Phase 5, Risk 6.
+**Scope:** the independent OG+Ownership vertical, its AFP requirements, and its decoupling
+from the Episodic stack.
 
 This document specifies a **generic Owicki-Gries / rely-guarantee program logic** over an
 **abstract transition system**, with **Ownership** as a concrete instantiation, packaged so it

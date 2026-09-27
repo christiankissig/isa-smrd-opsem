@@ -23,7 +23,3 @@ What survives here:
   digests (provisional placeholder types, import only `Main`). These are the
   structural source-of-truth for the reworked RCU client and are built by the
   legacy `MRD_C11_RCU` session for archival/reference.
-
-Target: a thin client = `prog_RCU` (labelled `command` data over the real Core
-types) + `Phi_RCU` (mordor) + no-UAF proof via the OpSem step relation, mirroring
-`clients/UAF_Bug/UAF_Bug.thy`.

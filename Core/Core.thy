@@ -8,8 +8,8 @@
     semantics live here -- MemSem owns action effects, EventStruct owns Phi, OpSem
     owns the step relation; all are written against these types.
 
-    Frozen per docs/SPIKE_B_label_digest_design.md (the Core public API) and
-    REWORK_PLAN.md sec 4.  Depends only on HOL (imports Main).
+    Frozen per docs/SPIKE_B_label_digest_design.md (the Core public API).
+    Depends only on HOL (imports Main).
 
     Constructor names are de-clashed for a single namespace: `Assign` (not `Set`),
     `IfElse` (not HOL's `If`), and the command-level fence is `CFence` (the
@@ -23,7 +23,7 @@ begin
 section \<open>Program labels\<close>
 
 text \<open>The paper's formal label is @{text "(pc(l), loopfun(l), iter(l))"} with
-  @{text "pc(l)"} a derived program point, not a hand-coded enum (REWORK sec 4).
+  @{text "pc(l)"} a derived program point, not a hand-coded enum.
   We split it into a STATIC instruction-label @{text iloc} (the key an
   instruction is stored under: owner, position, enclosing loops) and a DYNAMIC event-label
   @{text elabel} = @{text iloc} + iteration-vector + sub-event index (the key of

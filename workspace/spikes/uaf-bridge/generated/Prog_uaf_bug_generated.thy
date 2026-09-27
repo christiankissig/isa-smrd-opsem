@@ -1,7 +1,7 @@
 (*
   GENERATED FILE -- do not hand-edit.
 
-  Rendered by scripts/generate_phi.py (repo-side renderer, REWORK_PLAN.md s5 / W3)
+  Rendered by scripts/generate_phi.py (repo-side renderer)
   from a mordor `isa`-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
 
   Source program : uaf-bug.lit

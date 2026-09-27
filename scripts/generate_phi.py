@@ -10,7 +10,7 @@ docs/MORDOR_ISA_FORMAT.md) and emits an Isabelle/HOL theory containing:
   (2) the future set `Phi` (rendered `\\<Phi>_<prog>`) as a concrete constant:
       a set of edge-sets over event-labels, one set per execution.
 
-Boundary decision (REWORK_PLAN.md s5, MORDOR_ISA_FORMAT.md s0): mordor emits the
+Boundary decision (docs/MORDOR_ISA_FORMAT.md s0): mordor emits the
 JSON schema; THIS script renders Isabelle.  The Isabelle type defs emitted here
 are PROVISIONAL / WIP placeholders, to be replaced by the Core types from Spike B.
 
@@ -537,7 +537,7 @@ def render_theory(doc, theory_name, derived_edges=None):
     a("(*")
     a("  GENERATED FILE -- do not hand-edit.")
     a("")
-    a("  Rendered by scripts/generate_phi.py (repo-side renderer, REWORK_PLAN.md s5 / W3)")
+    a("  Rendered by scripts/generate_phi.py (repo-side renderer)")
     a("  from a mordor `isa`-mode JSON document (schema v%s, docs/MORDOR_ISA_FORMAT.md)." % fmt)
     a("")
     a("  Source program : %s" % prog)
@@ -793,7 +793,7 @@ def render_core_phi(doc, theory_name, derived_edges=None, labels_import="UAF_Lab
     a("(*")
     a("  GENERATED FILE -- do not hand-edit.")
     a("")
-    a("  Rendered by scripts/generate_phi.py --core (REWORK_PLAN.md s5 / W3) from a")
+    a("  Rendered by scripts/generate_phi.py --core from a")
     a("  mordor isa-mode JSON document (schema v%s, docs/MORDOR_ISA_FORMAT.md)." % fmt)
     a("  Source program : %s" % prog)
     a("")

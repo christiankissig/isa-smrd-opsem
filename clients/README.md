@@ -6,7 +6,5 @@ data + a concrete `Φ` (generated from mordor) + a safety proof. Not AFP targets
 
 - **`UAF_Bug/`** — the paper's minimal 2-thread use-after-free example (`uaf-bug.lit` /
   `uaf-bug-fixed.lit`): bug reachable vs fixed excluded. The fast validation of the stack.
-  To be built fresh (Phase 4).
-- **`RCU/`** — the full RCU algorithm (no use-after-free, via `Ownership`). **Currently holds
-  the existing pre-rework RCU formalization** — mostly to be replaced/retired per the
-  REWORK_PLAN.md → §6 triage. The 114-future enumeration here is the "wrong future set".
+- **`RCU/`** — the RCU algorithm as program-as-data over `Core`, with the generated mordor
+  digests. Loop-free fragment only; no end-to-end no-use-after-free theorem yet.

@@ -268,7 +268,7 @@ section \<open>Episodicity\<close>
 
 text \<open>EPISODICITY: a program is episodic when every future collapses to a SINGLE
   posterior iteration per loop -- the property the @{text lb} reset relies on
-  (REWORK_PLAN sec ``Caveat for the iter-vector design'': episodic clients UAF and
+  (caveat for the iter-vector design: episodic clients UAF and
   RCU collapse to a single posterior iteration, so the @{term el_iters} component
   is effectively degenerate, always @{text 1}, in their Phi).
 

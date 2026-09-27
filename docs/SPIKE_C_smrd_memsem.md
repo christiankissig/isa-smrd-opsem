@@ -1,6 +1,6 @@
 # Spike C — Memory Semantics (MemSem) re-evaluation for SMRD
 
-**Scope.** REWORK_PLAN.md §2: decide whether the current RC11/surrey memory model
+**Scope.** Decide whether the current RC11/surrey memory model
 is the right basis for an SMRD-faithful `MemSem`, and define what `MemSem` should be.
 Answers Q1–Q5 + the fate of `PSem`/`OpSem_definite`.
 
@@ -27,7 +27,7 @@ surrey is small (the action vocabulary and the *shape* of an action transition
 with SMRD and is dropped. `PSem` **folds in** as the `memory`/alloc effects;
 `OpSem_definite` is **retired**.
 
-**Important correction to the plan's "likely outcome".** §2 tentatively proposed
+**Important correction to the earlier "likely outcome".** The rework plan tentatively proposed
 "reusing surrey's release/acquire **and** visible-write machinery where compatible".
 This evaluation finds those are exactly the coherence/ordering machinery that must be
 dropped: in the paper, acquire/release semantics and visible-write *ordering* are

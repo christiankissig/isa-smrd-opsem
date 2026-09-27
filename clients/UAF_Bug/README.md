@@ -9,4 +9,5 @@ see `workspace/spikes/uaf-bridge/`).
 `Read rC` is pending (UAF reachable); fixed variant *excludes* it (release edge keeps the
 free out of `horizonΦ_{H₀}`) — matching the paper's `tab-fut-step-bug` / `-fix`.
 
-**Status:** to be built fresh (REWORK_PLAN.md → Phase 4). Empty scaffolding.
+**Status:** `uaf_reachable_bug` and `uaf_excluded_fixed` proven (the latter over a
+handshake-enriched Φ; see the top-level README).

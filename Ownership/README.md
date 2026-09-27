@@ -1,4 +1,4 @@
-# Ownership (reusable ★ — **first AFP target**)
+# Ownership (reusable ★ — AFP-bound)
 
 `Ownership` as a concrete **implementation/instantiation of `OwickiGries`**: the ownership
 predicate, the transfer semantics (locality / footprint / fresh acquisition), the exclusivity
@@ -24,6 +24,4 @@ regenerate the document. The PDF lands at `Ownership/output/document.pdf`.
 ## AFP packaging
 
 This is the **instantiation** half of the two-entry split; the AFP entry `Ownership` depends on
-the AFP entry `OwickiGries`. To submit: register author id(s) in `metadata/authors`, fill the
-`date`/`authors` in `metadata`, and drop the entry (`ROOT`, `document/root.tex`,
-`Ownership.thy`) into the AFP tree alongside `OwickiGries`.
+the AFP entry `OwickiGries`.

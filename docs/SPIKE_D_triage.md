@@ -2,8 +2,7 @@
 
 **Date frozen:** 2026-06-07
 **Scope:** every `.thy` under `clients/RCU/` (60), `MemSem/` (2), `c11_opsem/` (8) = **70 theory files**.
-**Source of truth for dispositions:** REWORK_PLAN.md §6 (+ Appendix A). This document *verifies/refines*
-that table and freezes the per-file disposition + the sorry/oops baseline for the §9 burndown metric.
+This document freezes the per-file disposition + the sorry/oops baseline for tracking the burndown.
 
 Dispositions: **KEEP** (reuse ~as-is) · **ADAPT** (refactor into a target layer) · **RETIRE** (delete; subsumed)
 · **REPLACE** (delete; rebuilt differently) · **EVAL** (decision pending a spike) · **SPLIT** (parts go different ways).
@@ -105,7 +104,7 @@ The "12 000-sorry explosion" the rework targets is therefore concentrated and de
 | `RCU_wm_proofs_old.thy` (master, 42 lines) | RETIRE | **RETIRE** | 0/0 | Umbrella import of the per-lemma split. |
 | `RCU_wm_proofs_old_*.thy` (40 per-lemma files) | RETIRE | **RETIRE** | **12326**/0 | Admitted per-future explosion; see §1 contributors. Includes I1–I14 (I11×3), R1–R5, S1–S7, `cas_res`, `covered_exists_after_step`, `finished`, `method`, `showing_block_cond_pres_{global,local,local_2}`, `showing_det_block_pres_global{,_CAS,_FAAZ}`, `sigma_obs_preserved_forall`, `supporting_block_cond_sep`. |
 
-### Scripts / scratch (not .thy — listed for completeness, per §6)
+### Scripts / scratch (not .thy — listed for completeness)
 `scripts/generate_futures*.py` → **REPLACE** by `generate_phi.py`; `RCU_test.thy`/`current.thy` (in `workspace/scratch/`) → **RETIRE**; editor backups / `*.thy_new` / repair snapshots → **RETIRE**.
 
 ---

@@ -181,7 +181,7 @@ text \<open>Worth spelling out, since it is easy to misread the three axioms abo
   from this locale (e.g.\ @{text "Ownership_UAF.uaf_safe"}): those theorems are
   universally quantified over it, to be supplied later by whichever client
   interprets the locale (the Episodic @{text OpSem} step relation, for the
-  RCU client -- deferred "Phase 6" work, see @{text
+  RCU client -- deferred work, see @{text
   "docs/W1_owicki_gries_design.md"} \<section>6). The only place @{term
   astep} is actually consulted downstream of this locale is @{term
   ann_step}'s @{text ABasic} rule; @{term ann_par_step} / @{term

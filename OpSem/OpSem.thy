@@ -1,7 +1,7 @@
 (*  Title:      OpSem/OpSem.thy
     Author:     Christian Kissig
 
-    OpSem (REWORK_PLAN Phase 3a + 3b / workstreams W8a and W8b): the Episodic
+    OpSem: the Episodic
     operational semantics.  This file provides
 
       1. the command/effect bridge -- a generic per-command effect that, for a
@@ -501,7 +501,7 @@ text \<open>A client (UAF, RCU, \<dots>) instantiates the program text @{term pr
   the sibling @{text OwickiGries} entry's @{text transition_system} (nor
   @{text Ownership}'s @{text ownership_system}), so a client wanting the
   Owicki-Gries / ownership machinery over @{term step} would have to bridge
-  the two itself (the deferred "Phase 6" interpretation, see
+  the two itself (the deferred RCU interpretation, see
   @{text "docs/W1_owicki_gries_design.md"} section 6) -- an
   @{text interpretation} or @{text sublocale} linking this locale's @{term
   step} to @{text transition_system}'s @{text astep} is not done anywhere in
