@@ -11,23 +11,23 @@ relation is contextual in a fixed future set Φ:
 prog, Φ ⊢ (σ, ρ, H) → (σ', ρ', H')
 ```
 
-The development is a **stack of self-contained, reusable Isabelle sessions**, several
-intended for the **Archive of Formal Proofs (AFP)**, with Φ generated from the
-[**mordor**](https://github.com/christiankissig/mordor) event-structure tool.
+The development is a **stack of self-contained, reusable Isabelle sessions**, with Φ
+generated from the [**mordor**](https://github.com/christiankissig/mordor)
+event-structure tool.
 
 ## Architecture
 
-Bottom-up; each reusable layer (★ = AFP-candidate) imports only layers below it.
+Bottom-up; each reusable layer imports only layers below it.
 
 ```
-Core ★        labels (pc·loopfun·iter), memory orders, expressions,
+Core          labels (pc·loopfun·iter), memory orders, expressions,
               the abstract action alphabet, the abstract command language,
               and the digested `LABEL is INSTRUCTION` program.  No semantics.
-MemSem ★      σ = (viswrite, memory, φ, RF) + action effects σ ⤳ₜ σ'  (SMRD).
-EventStruct ★ ppo, DP, executions, futures Φ, histories, horizonΦ_H, episodicity.
-OpSem ★       command→action rules + inductive `step prog Φ`; client locale.
+MemSem        σ = (viswrite, memory, φ, RF) + action effects σ ⤳ₜ σ'  (SMRD).
+EventStruct   ppo, DP, executions, futures Φ, histories, horizonΦ_H, episodicity.
+OpSem         command→action rules + inductive `step prog Φ`; client locale.
 
-OwickiGries ★ + Ownership ★   — INDEPENDENT vertical (AFP-bound):
+OwickiGries + Ownership   — INDEPENDENT vertical:
               generic Owicki-Gries over an abstract transition system + soundness,
               with Ownership as a concrete instantiation (ownership ⟹ non-interference,
               use-after-free safety).  Depends only on HOL.
@@ -36,8 +36,8 @@ Clients:      UAF_Bug (paper's minimal bug/fix) · RCU_Client (RCU as program-as
 ```
 
 `OwickiGries`/`Ownership` are deliberately decoupled from the Episodic stack and meet it
-only at the RCU client's interpretation theory — which is what lets them be the first AFP
-submission. Full rationale in [`docs/W1_owicki_gries_design.md`](docs/W1_owicki_gries_design.md).
+only at the RCU client's interpretation theory, so they stand on their own.
+Full rationale in [`docs/W1_owicki_gries_design.md`](docs/W1_owicki_gries_design.md).
 
 ## Building
 
@@ -58,7 +58,7 @@ make uaf         # UAF_Bug       (paper's bug/fix client; needs OpSem)
 make rcu-client  # RCU_Client    (RCU program-as-data; needs OpSem)
 make og          # OwickiGries
 make ownership   # Ownership     (needs OwickiGries); alias: make track-a
-make gate        # from-CLEAN rebuild of the whole stack — the zero-sorry AFP gate
+make gate        # from-CLEAN rebuild of the whole stack — the zero-sorry gate
 make ci          # what CI runs (strict gate on mature layers + spine compile-check)
 make rcu         # the legacy MRD_C11_RCU session (now just the generated digests)
 make dry         # confirm the reworked layers are up to date (no recompile)
@@ -77,12 +77,12 @@ names (e.g. `imports "Core.Core"`, `imports "OpSem.OpSem"`). Equivalent raw invo
 ## Repository layout
 
 ```
-Core/            ★ shared vocabulary (Core.thy + ROOT)             [built]
-MemSem/          ★ thin SMRD memory semantics (MemSem.thy + ROOT)  [built]
-EventStruct/     ★ event-structure semantics (EventStruct.thy + ROOT)  [built]
-OpSem/           ★ Episodic operational semantics (OpSem.thy + ROOT)   [built]
-OwickiGries/     ★ generic Owicki-Gries framework (proven) + ROOT + metadata
-Ownership/       ★ ownership instantiation (proven) + ROOT + metadata
+Core/              shared vocabulary (Core.thy + ROOT)             [built]
+MemSem/            thin SMRD memory semantics (MemSem.thy + ROOT)  [built]
+EventStruct/       event-structure semantics (EventStruct.thy + ROOT)  [built]
+OpSem/             Episodic operational semantics (OpSem.thy + ROOT)   [built]
+OwickiGries/       generic Owicki-Gries framework (proven) + ROOT + metadata
+Ownership/         ownership instantiation (proven) + ROOT + metadata
 clients/UAF_Bug/   minimal use-after-free example (paper's headline)
 clients/RCU/       RCU_Client.thy (program-as-data) + generated mordor digests + ROOT
 c11_opsem/         base C11 memory model (formerly a git submodule; now in-tree)
