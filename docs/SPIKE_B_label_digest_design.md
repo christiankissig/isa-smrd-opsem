@@ -17,7 +17,7 @@ program. It is the `Core` layer's public API; `EventStruct` (Φ over event-label
 ## 0. The two-line summary of the decisions
 
 1. **Two label granularities, formally linked.** The *digest* is keyed by a **static
-   instruction-label** `iloc` (≈ mordor `t<tid>.<seq>` + its `loops` array). Φ and
+   instruction-label** `iloc` (≈ MoRDor `t<tid>.<seq>` + its `loops` array). Φ and
    histories are over **event-labels** `elabel = iloc + iteration-vector + sub-event
    index `k``. The paper's formal label `l` (with per-event `pc`, `loopfun`, `iter`) **is**
    the `elabel`; an instruction with `n` events (CAS=3, FAA=2) is **one digest entry** whose
@@ -27,7 +27,7 @@ program. It is the `Core` layer's public API; `EventStruct` (Φ over event-label
    *abbreviations over keys*, not a datatype (retires the `RCU_state.PC` enum).
 3. **Rolled digest, unrolled Φ, bridged by the iteration-vector.** The digest carries
    `If`/`While` structure (rolled). `elabel.el_iters` carries the dynamic `iter(l)(ℓ)` that
-   mordor's `@loop:iter` suffix supplies; the `lb` rule's `iter(H) < iter(l)` test reads it
+   MoRDor's `@loop:iter` suffix supplies; the `lb` rule's `iter(H) < iter(l)` test reads it
    directly (resolves **Q4**).
 4. **Lexicographic linorder via an explicit order key** `okey :: elabel ⇒ (nat × nat) list`
    ordered by `lexordp` — outer-loop `(header, iter)` dominates inner, terminated by
@@ -56,13 +56,13 @@ type_synonym tid    = nat
 type_synonym loopid = nat
 type_synonym iter   = nat
 
-(* Who owns the instruction: the thread-less init/preamble (mordor "g.*") or a thread. *)
+(* Who owns the instruction: the thread-less init/preamble (MoRDor "g.*") or a thread. *)
 datatype owner = Init | Thr tid
 
-(* STATIC instruction-label = the digest key. mordor "t<tid>.<seq>" + its "loops" array. *)
+(* STATIC instruction-label = the digest key. MoRDor "t<tid>.<seq>" + its "loops" array. *)
 record iloc =
   ilo_owner :: owner
-  ilo_seq   :: nat            (* 1-based syntactic position within the owner (mordor <seq>) *)
+  ilo_seq   :: nat            (* 1-based syntactic position within the owner (MoRDor <seq>) *)
   ilo_loops :: "loopid list"  (* loopfun: enclosing loops, innermost LAST ([] outside loops) *)
 
 (* DYNAMIC event-label = the paper's formal label l = (pc, loopfun, iter), the key of Φ/H.
@@ -85,7 +85,7 @@ definition iterf   :: "elabel ⇒ loopid ⇀ iter" where
 ```
 
 Why `iters` lives on `elabel`, not `iloc`: the digest is **rolled** — the static instruction
-is in loop `ℓ` (it carries `ilo_loops`) but has no iteration until run. mordor's Φ is
+is in loop `ℓ` (it carries `ilo_loops`) but has no iteration until run. MoRDor's Φ is
 **unrolled** and supplies the iteration via the `@loop:iter` suffix; the renderer parses
 `"t0.7@1:1#2"` into `⟨el_iloc = ⟨Thr 0, 7, [1]⟩, el_iters = [1], el_k = 2⟩`. This is exactly
 the rolled/unrolled bridge of Q4 (§4).
@@ -151,7 +151,7 @@ back-to-back loops here (§4).
 ```isabelle
 datatype mem_order = Rlx | Acq | Rel | Acq_rel | Sc
 
-type_synonym reg  = string         (* register name, mordor "reg" *)
+type_synonym reg  = string         (* register name, MoRDor "reg" *)
 type_synonym var  = string         (* global symbolic variable x (read-var / write-var) *)
 type_synonym sym  = nat            (* symbolic value α / symbolic location returned by alloc *)
 type_synonym valu = int            (* concrete integer literal *)
@@ -221,9 +221,9 @@ Notes:
   not per PC.
 - `ReadRef` and `Set` emit **no** action (`events: []` in the isa output — cf. `cas_aba`
   `t0.1` Set), so they step `σ` unchanged and only update `ρ`.
-- `If`/`While` carry nested `instr list` bodies — the **rolled** structure (mordor's nested
-  `then`/`else`/`body`). `While` records its `loopid` (mordor `loop_id`), which feeds the
-  static `hdr`/`ilo_loops` tables. (mordor emits `Do`/`While`; both map here, the renderer
+- `If`/`While` carry nested `instr list` bodies — the **rolled** structure (MoRDor's nested
+  `then`/`else`/`body`). `While` records its `loopid` (MoRDor `loop_id`), which feeds the
+  static `hdr`/`ilo_loops` tables. (MoRDor emits `Do`/`While`; both map here, the renderer
   normalises to `While`.)
 
 ### 2.4 `command → events` arity (the `iloc`↔`elabel` link, §1.2)
@@ -248,7 +248,7 @@ horizonΦ_H` (one label `l`, action list `ā`).
 
 ```isabelle
 type_synonym program = "instr list"        (* the whole digest; owner in each iloc separates
-                                              Init (mordor "g.*") from each thread            *)
+                                              Init (MoRDor "g.*") from each thread            *)
 
 (* the rolled per-thread / init command map  prog(o) : iloc ⇀ command  (paper proḡ(t)) *)
 definition prog :: "program ⇒ owner ⇒ iloc ⇀ command" where
@@ -315,7 +315,7 @@ One digest entry; `n_events (Cas …) = 3` ⇒ event-labels `t0.7@1:i#0` (R), `t
 
 ## 4. Rolled program ↔ unrolled Φ and the `lb` reset (Q4)
 
-**The shape of the problem.** The digest is **rolled** (`While loopid bexp body`); mordor
+**The shape of the problem.** The digest is **rolled** (`While loopid bexp body`); MoRDor
 computes Φ on a **step-counter-unrolled** event set, so Φ's event-labels carry the iteration
 in `@loop:iter`. The `lb` rule (`rules/step:lb`) fires when stepping a label `l` whose
 iteration exceeds everything in `H` for that loop (`iter(H) < iter(l)`), resets `σ`/`ρ`/`φ`/`H`
@@ -324,7 +324,7 @@ restricted to that loop (`·|^t_{∖loopfun(l)}`), and re-bases the label to the
 
 **How the iteration carries (the design).**
 - Φ stays indexed by **`elabel`** (iteration-vector included). The renderer parses each
-  mordor `@loop:iter` suffix into `el_iters` (and asserts the loops agree with the static
+  MoRDor `@loop:iter` suffix into `el_iters` (and asserts the loops agree with the static
   `ilo_loops`). So Φ membership `(l:ā) ∈* horizonΦ_H` compares fully-iterated event-labels —
   no rolling needed on Φ's side.
 - The **digest** stays rolled; `OpSem`'s step, when it enters the body of `While ℓ`, manufactures
@@ -339,7 +339,7 @@ restricted to that loop (`·|^t_{∖loopfun(l)}`), and re-bases the label to the
 **What RCU stresses (flagged, not yet exercised — cas_aba is the closest precedent):**
 1. **Back-to-back loops** in one thread (cas_aba `t1.3` then `t1.10`, distinct `loop_id`s 2,3) —
    the `hdr`/`ilo_loops` tables must keep loop-ids globally unique per program so `iter_H`
-   doesn't bleed across loops. mordor already assigns fresh ids (1,2,3), good.
+   doesn't bleed across loops. MoRDor already assigns fresh ids (1,2,3), good.
 2. **Nested loops** (sync()/grace-period inside a retry) — `ilo_loops`/`el_iters` length > 1;
    `okey`'s outer-first ordering (§1.4) and the loop-restriction `loopfun ℓ ⊆ loopfun(l')` are
    only exercised by RCU. The nested example label form is the hypothetical `t0.7@2:3@1:1#0`
@@ -351,7 +351,7 @@ restricted to that loop (`·|^t_{∖loopfun(l)}`), and re-bases the label to the
    `Max (insert 0 …)` form handles the empty case.
 
 This is a *design*, not a proof: the obligation `EventStruct`/`OpSem` must discharge is that
-`iter_H`/`okey` make the `lb` rule fire exactly at mordor's unrolled iteration boundaries
+`iter_H`/`okey` make the `lb` rule fire exactly at MoRDor's unrolled iteration boundaries
 (a regression `value`-check against the RCU `isa` Φ).
 
 ---
@@ -363,14 +363,14 @@ This is a *design*, not a proof: the obligation `EventStruct`/`OpSem` must disch
 
 Rationale, now that `isa` exists:
 - **Trusted base stays small & the digest stays auditable.** The digest is the *readable
-  specification* of the client program. Hand-authoring keeps mordor's parser
+  specification* of the client program. Hand-authoring keeps MoRDor's parser
   out of the trusted base for the program text, and keeps the Isabelle readable (a generated
   digest risks the "ugly, hard-to-audit Isabelle" of Q1).
 - **`isa` removes the drift risk for free.** Because the schema now carries the full structured
   program (labels, commands, operands, loops), we can mechanically cross-check the hand digest
   against it — a conformance test that the hand digest's
   `{(iloc, command-shape, loops)}` set equals the rendered `isa` document. This is the best of
-  both: auditable source **and** a machine guarantee it matches mordor's parse.
+  both: auditable source **and** a machine guarantee it matches MoRDor's parse.
 - **Φ is always generated** (`scripts/generate_phi.py`): it is large, unreadable,
   and not meant to be inspected; it carries a provenance header.
 
@@ -414,7 +414,7 @@ Concretely:
    to `sym` in `action`. Confirm against the first RCU digest (RCU uses named globals `C`,
    `rcu[]`).
 5. **Init ordering** — `Init` is ordered before all threads in the `elabel` linorder; adequate
-   for the preamble, but if mordor ever interleaves init with threads this needs revisiting
+   for the preamble, but if MoRDor ever interleaves init with threads this needs revisiting
    (not the case in any current `isa` output).
 6. **MORDOR_ISA v0.2 "after-threads"/`Do`-vs-`While`** — the epilogue bucket and `Do`
    normalisation (§2.3) are renderer concerns; the `command` type already covers them.

@@ -19,7 +19,7 @@ Deleted in the retirement:
   `MemSem/OpSem_definite.thy` (their content is folded into `MemSem/MemSem.thy`).
 
 What survives here:
-- **`RCU_prog_digest.thy` / `RCU_inc_loop_digest.thy`** — the GENERATED mordor
+- **`RCU_prog_digest.thy` / `RCU_inc_loop_digest.thy`** — the GENERATED MoRDor
   digests (provisional placeholder types, import only `Main`). These are the
   structural source-of-truth for the reworked RCU client and are built by the
   legacy `MRD_C11_RCU` session for archival/reference.

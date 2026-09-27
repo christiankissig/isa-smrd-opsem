@@ -12,7 +12,7 @@
    (PSem.thy, OpSem_definite.thy) have likewise been retired; the reworked
    MemSem session folds their content in (see MemSem/MemSem.thy).
 
-   What survives in clients/RCU are the two GENERATED mordor digests
+   What survives in clients/RCU are the two GENERATED MoRDor digests
    (RCU_prog_digest, RCU_inc_loop_digest) -- the structural source-of-truth for
    the reworked RCU client.  They import only Main, so this session builds them
    for archival / reference; the real RCU client is being rebuilt in the spine

@@ -174,7 +174,7 @@ program has a corresponding derivation. Split the obligation by layer:
 
 **Consequence:** because all ordering lives in Φ, MemSem can be proved sound *independently*
 of the SMRD-vs-RC11 distinction — the distinction is entirely in how Φ is computed
-(mordor, `ppo∪DP` vs `po`). This is the key reason the thin σ is the right MemSem: it makes
+(MoRDor, `ppo∪DP` vs `po`). This is the key reason the thin σ is the right MemSem: it makes
 the memory layer **memory-model-agnostic**, with SMRD-vs-RC11 a property of Φ alone.
 
 ## Fate of PSem / OpSem_definite.

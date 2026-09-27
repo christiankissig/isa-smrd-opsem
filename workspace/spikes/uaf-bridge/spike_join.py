@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""W3/Spike A: mordor -> labelled Phi bridge, demonstrated on the UAF example.
+"""W3/Spike A: MoRDor -> labelled Phi bridge, demonstrated on the UAF example.
 Joins `executions` (event table + ppo/dp) into a labelled future set, cross-checks
 against `futures`, and shows the bug-vs-fix horizon difference."""
 import json, sys, re

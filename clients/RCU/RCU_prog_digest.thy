@@ -2,7 +2,7 @@
   GENERATED FILE -- do not hand-edit.
 
   Rendered by scripts/generate_phi.py (repo-side renderer)
-  from a mordor `isa`-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
+  from a MoRDor `isa`-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
 
   Source program : rcu3
   Producing cmd  : mordor futures --single rcu3 --output-mode isa

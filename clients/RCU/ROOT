@@ -16,7 +16,7 @@ session RCU_Client = OpSem +
     Imports OpSem session-qualified (which carries the two documented open spine
     sorries), so this builds under quick_and_dirty alongside the rest of the spine.
 
-    The surviving generated mordor digests `RCU_prog_digest` / `RCU_inc_loop_digest`
+    The surviving generated MoRDor digests `RCU_prog_digest` / `RCU_inc_loop_digest`
     (provisional placeholder types, import only Main) are built by the legacy
     `MRD_C11_RCU` session (top-level ROOT), not here.
   \<close>

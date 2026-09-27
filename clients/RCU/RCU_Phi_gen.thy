@@ -2,7 +2,7 @@
   GENERATED FILE -- do not hand-edit.
 
   Rendered by scripts/generate_phi.py --core from a
-  mordor isa-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
+  MoRDor isa-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
   Source program : rcuincreclaim
 
   Emits \<Phi>_rcuincreclaim over the REAL Core @{typ elabel} types (via the shared
@@ -15,7 +15,7 @@ theory RCU_Phi_gen
 begin
 
 text \<open>The future set \<open>\<Phi>_rcuincreclaim\<close> over Core @{typ elabel}, one
-  edge-set per execution; rendered from the mordor isa JSON.\<close>
+  edge-set per execution; rendered from the MoRDor isa JSON.\<close>
 
 definition \<Phi>_rcuincreclaim_exec0 :: future where
   "\<Phi>_rcuincreclaim_exec0 =

@@ -8,7 +8,7 @@ session UAF_Bug = OpSem +
 
     Defines `prog_uaf_bug` / `prog_uaf_fixed` as Core-typed labelled `command` data
     and `Phi_uaf` / `Phi_uaf_fixed` as EventStruct `Phi` (edge-sets over `elabel`,
-    adapted faithfully from the mordor-rendered generated digest).  The ONLY
+    adapted faithfully from the MoRDor-rendered generated digest).  The ONLY
     semantic difference between bug and fixed is the exit write's `mem_order`
     (relaxed vs `rel`) and hence the presence of the deref->exit ppo edge in Phi.
 

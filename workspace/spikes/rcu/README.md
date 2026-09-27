@@ -1,10 +1,10 @@
-# Spike A — RCU mordor bridge (loops/iter validation)
+# Spike A — RCU MoRDor bridge (loops/iter validation)
 
 Date: 2026-06-07 (sc=1 on rcu-1/rcu-3); **updated 2026-06-09** (iter-labels validated on a
 minimal retry-loop fixture — see "Resolution" below).
 Relates to the v0.2 open item of `docs/MORDOR_ISA_FORMAT.md`: RCU loops/iter on a real retry loop.
 
-mordor binary: `/home/christian/workspace/mordor/_build/default/cli/main.exe`
+MoRDor binary: `/home/christian/workspace/mordor/_build/default/cli/main.exe`
 Inputs: `programs/rcu-1.lit` (single thread), `programs/rcu-3.lit` (3 threads, `|||`-separated),
 and the local fixture `rcu-inc-loop.lit` (single-thread inc() retry loop only).
 

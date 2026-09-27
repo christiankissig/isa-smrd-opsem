@@ -1,15 +1,15 @@
-# mordor ↔ Isabelle interchange format (`isa` output) — SPECIFICATION
+# MoRDor ↔ Isabelle interchange format (`isa` output) — SPECIFICATION
 
-**Status:** v0.1 — **implemented in mordor and conformance-passing (2026-06-07).** mordor's
+**Status:** v0.1 — **implemented in MoRDor and conformance-passing (2026-06-07).** MoRDor's
 `isa` output mode (`src/isa_export.ml`) now emits this schema; verified against
 `uaf-bug{,-fixed}.lit` (structure + bug/fix discriminating edge) and `cas_aba.lit` (RMW
 sub-events + loop-iteration suffixes). This spec is a **deliverable of `isa-smrd-opsem`** and the
 **contract** for that output. v0.2 refinements + RCU validation pending in **Spike B**.
 
 ## 0. Boundary decision *(leaning, confirm)*
-mordor emits a **versioned structured JSON** per this schema; the repo's `scripts/generate_phi.py`
+MoRDor emits a **versioned structured JSON** per this schema; the repo's `scripts/generate_phi.py`
 renders it to Isabelle (the `_ is _` digest + `Φ_P` constant + label defs). This keeps
-Isabelle-specific notation in this repo and mordor Isabelle-agnostic/reusable. *(Alternative:
+Isabelle-specific notation in this repo and MoRDor Isabelle-agnostic/reusable. *(Alternative:
 `isa` emits Isabelle source directly — rejected for the first cut.)*
 Every document carries `format_version`; the conformance fixture is `programs/uaf-bug{,-fixed}.lit`.
 
@@ -37,7 +37,7 @@ Every document carries `format_version`; the conformance fixture is `programs/ua
   An RMW (CAS=3, FAA=2) shares one instruction-label; its sub-events are `#0,#1,#2`.
 - **loops / iter** *(rolled program):* each instruction carries `"loops": [<loop-id>...]`
   (`loopfun`, innermost last; `[]` if outside loops). Event-labels inside loops gain an iteration
-  suffix `"@<loop-id>:<iter>"` in `futures` (mordor's unrolled events), which the `lb`-rule
+  suffix `"@<loop-id>:<iter>"` in `futures` (MoRDor's unrolled events), which the `lb`-rule
   collapses. UAF has no loops; **RCU is the first real test of this part.**
 - Lexicographic order over `(t, seq/line:col, loops, iter, k)` realises the paper's
   `(pc,loopfun,iter)` comparison.
@@ -69,7 +69,7 @@ Every document carries `format_version`; the conformance fixture is `programs/ua
 `ptr`/`loc`: a register holding an address (`{"reg":"rC"}` or bare `"rC"`).
 
 ## 4. Events / actions
-Event `type` ∈ `R | W | Branch | Fence | Alloc | Dealloc` (mordor's `I`/`T` init/terminator are
+Event `type` ∈ `R | W | Branch | Fence | Alloc | Dealloc` (MoRDor's `I`/`T` init/terminator are
 implicit, not digest instructions). Each event inherits `order`/`loc`/value from its command.
 
 ## 5. Worked example — `uaf-bug.lit`  *(idealised target format)*
@@ -145,7 +145,7 @@ absent. `Φ` edges reference these event-labels.
   (e.g. the trailing `rv := *rC` in `cas_aba.lit`) is currently bucketed into `init`, since the
   schema has no epilogue section. Decide: add a `"fini"`/`"epilogue"` array, or keep folding into
   `init` (documented).
-- §0 boundary confirmed for v0.1: mordor emits the schema; repo renders Isabelle.
+- §0 boundary confirmed for v0.1: MoRDor emits the schema; repo renders Isabelle.
 - **Grammar gaps found by the W3 renderer (add in v0.2):** `Do` (do-while) op appears in
   `cas_aba` but is not in §3 (renderer treats it like `While`); and `Faa`/`Cas` carry an
   `rmw_op` field (`"strong"`) not in the §3 operand table (currently dropped). Add both to §3.

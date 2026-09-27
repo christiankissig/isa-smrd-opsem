@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""generate_phi.py  --  repo-side renderer ("W3") for the mordor -> Isabelle bridge.
+"""generate_phi.py  --  repo-side renderer ("W3") for the MoRDor -> Isabelle bridge.
 
-Consumes a mordor `isa`-mode JSON document (schema v0.1, see
+Consumes a MoRDor `isa`-mode JSON document (schema v0.1, see
 docs/MORDOR_ISA_FORMAT.md) and emits an Isabelle/HOL theory containing:
 
   (1) the *digested program* as a list of `LABEL is INSTRUCTION` entries
@@ -10,7 +10,7 @@ docs/MORDOR_ISA_FORMAT.md) and emits an Isabelle/HOL theory containing:
   (2) the future set `Phi` (rendered `\\<Phi>_<prog>`) as a concrete constant:
       a set of edge-sets over event-labels, one set per execution.
 
-Boundary decision (docs/MORDOR_ISA_FORMAT.md s0): mordor emits the
+Boundary decision (docs/MORDOR_ISA_FORMAT.md s0): MoRDor emits the
 JSON schema; THIS script renders Isabelle.  The Isabelle type defs emitted here
 are PROVISIONAL / WIP placeholders, to be replaced by the Core types from Spike B.
 
@@ -294,17 +294,17 @@ def collect_events(instrs, acc):
 # handshake derivation: cross-thread synchronizes-with from reads-from
 # --------------------------------------------------------------------------
 #
-# Single-program mordor `futures` (the isa JSON) carries only the (ppo u DP)
+# Single-program MoRDor `futures` (the isa JSON) carries only the (ppo u DP)
 # edges within the program's preserved order; it does NOT emit the cross-thread
 # synchronizes-with that a release/acquire handshake creates -- e.g. the RCU
 # reclaimer's quiescence read reading-from the reader's release-exit.  That edge
-# is, however, present in mordor's per-execution `rf` (reads-from) relation in
+# is, however, present in MoRDor's per-execution `rf` (reads-from) relation in
 # the *executions*-mode JSON.  When such a companion document is supplied
 # (--executions), we DERIVE the handshake edges rather than hand-adding them:
 #
 #   for every rf(w, r) whose writer w is a RELEASE-class write, add  w -> r.
 #
-# This is execution-faithful (it uses mordor's computed rf for that execution,
+# This is execution-faithful (it uses MoRDor's computed rf for that execution,
 # not a structural guess) and selects exactly the synchronizing subset: a
 # relaxed-write rf creates no ordering and is correctly excluded (which is why
 # the buggy variant, whose exit write is relaxed, gains no edge and stays
@@ -312,7 +312,7 @@ def collect_events(instrs, acc):
 # event-labels by robust signatures (writes by short-order + value, allocs by
 # program order, reads by the location-name learned from those matches).
 
-# mordor `executions` memory-order spelling -> schema short order
+# MoRDor `executions` memory-order spelling -> schema short order
 _EXEC_ORDER = {
     "Relaxed": "rlx", "Acquire": "acq", "Release": "rel",
     "AcqRel": "acq_rel", "Acq_Rel": "acq_rel", "SeqCst": "sc", "SC": "sc",
@@ -402,7 +402,7 @@ def _index_isa_memops(doc):
 
 
 def derive_handshake_edges(isa_doc, exec_doc):
-    """Derive cross-thread release handshake edges from mordor's rf relation.
+    """Derive cross-thread release handshake edges from MoRDor's rf relation.
 
     Returns (edges, warnings): `edges` is a set of (src_label, dst_label)
     event-label pairs (W -> R for each rf(W,R) with W a release-class write);
@@ -538,7 +538,7 @@ def render_theory(doc, theory_name, derived_edges=None):
     a("  GENERATED FILE -- do not hand-edit.")
     a("")
     a("  Rendered by scripts/generate_phi.py (repo-side renderer)")
-    a("  from a mordor `isa`-mode JSON document (schema v%s, docs/MORDOR_ISA_FORMAT.md)." % fmt)
+    a("  from a MoRDor `isa`-mode JSON document (schema v%s, docs/MORDOR_ISA_FORMAT.md)." % fmt)
     a("")
     a("  Source program : %s" % prog)
     a("  Producing cmd  : mordor futures --single %s --output-mode isa" % prog)
@@ -556,7 +556,7 @@ def render_theory(doc, theory_name, derived_edges=None):
     a("  Notes / faithfulness:")
     if derived_edges:
         a("    * Cross-thread release HANDSHAKE edges (W -> R) are DERIVED from")
-        a("      mordor's per-execution reads-from (release-class writer) and added")
+        a("      MoRDor's per-execution reads-from (release-class writer) and added")
         a("      to \\<Phi>; single-program `futures` does not emit these synchronizes-")
         a("      with edges.  Each derived edge is flagged with an inline `text` note")
         a("      on the execution it augments (added only where both endpoints occur).")
@@ -632,7 +632,7 @@ def render_theory(doc, theory_name, derived_edges=None):
     a(r"  event-labels); \<open>\<Phi>_%s\<close> is the set of those edge-sets.\<close>" % frag)
     if derived_edges:
         a(r"text \<open>This \<open>\<Phi>\<close> is ENRICHED with cross-thread release-handshake")
-        a(r"  edges \<open>(W \<rightarrow> R)\<close> DERIVED from mordor's per-execution")
+        a(r"  edges \<open>(W \<rightarrow> R)\<close> DERIVED from MoRDor's per-execution")
         a(r"  reads-from relation (release-class writer); these are the")
         a(r"  synchronizes-with that single-program \<open>futures\<close> omits.  Each is")
         a(r"  added only to executions whose event-labels already contain both")
@@ -794,7 +794,7 @@ def render_core_phi(doc, theory_name, derived_edges=None, labels_import="UAF_Lab
     a("  GENERATED FILE -- do not hand-edit.")
     a("")
     a("  Rendered by scripts/generate_phi.py --core from a")
-    a("  mordor isa-mode JSON document (schema v%s, docs/MORDOR_ISA_FORMAT.md)." % fmt)
+    a("  MoRDor isa-mode JSON document (schema v%s, docs/MORDOR_ISA_FORMAT.md)." % fmt)
     a("  Source program : %s" % prog)
     a("")
     a("  Emits \\<Phi>_%s over the REAL Core @{typ elabel} types (via the shared" % frag)
@@ -803,7 +803,7 @@ def render_core_phi(doc, theory_name, derived_edges=None, labels_import="UAF_Lab
     if derived_edges:
         a("")
         a("  \\<Phi> is ENRICHED with cross-thread release-handshake edges DERIVED from")
-        a("  mordor's per-execution reads-from (release-class writer); flagged inline.")
+        a("  MoRDor's per-execution reads-from (release-class writer); flagged inline.")
     a("*)")
     a("")
     a("theory %s" % theory_name)
@@ -811,7 +811,7 @@ def render_core_phi(doc, theory_name, derived_edges=None, labels_import="UAF_Lab
     a("begin")
     a("")
     a(r"text \<open>The future set \<open>\<Phi>_%s\<close> over Core @{typ elabel}, one" % frag)
-    a(r"  edge-set per execution; rendered from the mordor isa JSON.\<close>")
+    a(r"  edge-set per execution; rendered from the MoRDor isa JSON.\<close>")
     a("")
 
     exec_defs = []
@@ -868,11 +868,11 @@ def render_core_phi(doc, theory_name, derived_edges=None, labels_import="UAF_Lab
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("input", help="mordor isa-mode JSON document")
+    p.add_argument("input", help="MoRDor isa-mode JSON document")
     p.add_argument("-o", "--output", help="output .thy file (default: stdout)")
     p.add_argument("--theory", help="Isabelle theory name (default: derived)")
     p.add_argument("--executions", metavar="EXEC.json",
-                   help="companion mordor executions-mode JSON; enables deriving "
+                   help="companion MoRDor executions-mode JSON; enables deriving "
                         "cross-thread release handshake edges from its rf relation")
     p.add_argument("--core", action="store_true",
                    help="emit ONLY \\<Phi> over the REAL Core elabel types (via the "

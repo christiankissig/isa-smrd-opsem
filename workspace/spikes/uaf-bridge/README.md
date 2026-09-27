@@ -1,9 +1,9 @@
-# Spike A / W3 — mordor → Φ bridge (UAF example) — VALIDATED 2026-06-07
+# Spike A / W3 — MoRDor → Φ bridge (UAF example) — VALIDATED 2026-06-07
 
-Validates the pipeline that turns a mordor analysis into a labelled future set Φ, on the
+Validates the pipeline that turns a MoRDor analysis into a labelled future set Φ, on the
 paper's minimal use-after-free example. See `docs/MORDOR_ISA_FORMAT.md`.
 
-## Commands (mordor at /home/christian/workspace/mordor)
+## Commands (MoRDor at /home/christian/workspace/mordor)
 ```
 BIN=mordor/_build/default/cli/main.exe
 $BIN executions --single mordor/programs/uaf-bug.lit       --output-mode json --output-file uaf_exec.json
@@ -13,7 +13,7 @@ $BIN futures    --single mordor/programs/uaf-bug-fixed.lit --output-mode json --
 python3 spike_join.py
 ```
 
-## `isa` output (the specified interchange format — mordor-side implemented 2026-06-07)
+## `isa` output (the specified interchange format — MoRDor-side implemented 2026-06-07)
 - `uaf_isa.json`, `uaf_fixed_isa.json`, `cas_aba_isa.json` — `futures --output-mode isa` per
   `docs/MORDOR_ISA_FORMAT.md` v0.1. uaf-bug/fixed reproduce the bug/fix discriminating edge;
   cas_aba shows RMW sub-events + loop-iteration labels. Command:
@@ -32,7 +32,7 @@ learned location). On these fixtures this derives exactly the handshake edge `t1
 for the **fixed** program (the `rcu:=0` Release read-from by the reclaimer's quiescence read, in
 the freeing execution) and **nothing** for the bug (its exit write is Relaxed, so its `rf` creates
 no synchronization and the UAF stays reachable). This is the edge that excludes the use-after-free
-in `clients/UAF_Bug/UAF_Bug.thy` (`uaf_excluded_fixed`) — now mordor-derived, not hand-asserted.
+in `clients/UAF_Bug/UAF_Bug.thy` (`uaf_excluded_fixed`) — now MoRDor-derived, not hand-asserted.
 
 ## Files
 - `uaf_exec.json`, `uaf_fixed_exec.json` — `executions` export: labelled events

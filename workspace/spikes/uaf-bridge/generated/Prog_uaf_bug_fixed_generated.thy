@@ -2,7 +2,7 @@
   GENERATED FILE -- do not hand-edit.
 
   Rendered by scripts/generate_phi.py (repo-side renderer)
-  from a mordor `isa`-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
+  from a MoRDor `isa`-mode JSON document (schema v0.1, docs/MORDOR_ISA_FORMAT.md).
 
   Source program : uaf-bug-fixed.lit
   Producing cmd  : mordor futures --single uaf-bug-fixed.lit --output-mode isa
@@ -18,7 +18,7 @@
 
   Notes / faithfulness:
     * Cross-thread release HANDSHAKE edges (W -> R) are DERIVED from
-      mordor's per-execution reads-from (release-class writer) and added
+      MoRDor's per-execution reads-from (release-class writer) and added
       to \<Phi>; single-program `futures` does not emit these synchronizes-
       with edges.  Each derived edge is flagged with an inline `text` note
       on the execution it augments (added only where both endpoints occur).
@@ -144,7 +144,7 @@ section \<open>Future set \<open>\<Phi>\<close>\<close>
 text \<open>Each execution contributes one edge-set (\<open>(ppo \<union> dp)\<close> over
   event-labels); \<open>\<Phi>_uaf_bug_fixed\<close> is the set of those edge-sets.\<close>
 text \<open>This \<open>\<Phi>\<close> is ENRICHED with cross-thread release-handshake
-  edges \<open>(W \<rightarrow> R)\<close> DERIVED from mordor's per-execution
+  edges \<open>(W \<rightarrow> R)\<close> DERIVED from MoRDor's per-execution
   reads-from relation (release-class writer); these are the
   synchronizes-with that single-program \<open>futures\<close> omits.  Each is
   added only to executions whose event-labels already contain both

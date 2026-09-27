@@ -12,7 +12,7 @@ prog, Φ ⊢ (σ, ρ, H) → (σ', ρ', H')
 ```
 
 The development is a **stack of self-contained, reusable Isabelle sessions**, with Φ
-generated from the [**mordor**](https://github.com/christiankissig/mordor)
+generated from the [**MoRDor**](https://github.com/christiankissig/mordor)
 weak memory explorer.
 
 ## Architecture
@@ -82,22 +82,22 @@ OpSem/             Episodic operational semantics (OpSem.thy + ROOT)   [built]
 OwickiGries/       generic Owicki-Gries framework (proven) + ROOT + metadata
 Ownership/         ownership instantiation (proven) + ROOT + metadata
 clients/UAF_Bug/   minimal use-after-free example (paper's headline)
-clients/RCU/       RCU_Client.thy (program-as-data) + generated mordor digests + ROOT
+clients/RCU/       RCU_Client.thy (program-as-data) + generated MoRDor digests + ROOT
 c11_opsem/         base C11 memory model (formerly a git submodule; now in-tree)
 scripts/           Φ generators (generate_phi.py)
-workspace/         non-source artifacts: spikes/ (mordor→Φ bridge)
+workspace/         non-source artifacts: spikes/ (MoRDor→Φ bridge)
 docs/              SPIKE_*, W1 design, MORDOR_ISA_FORMAT
 ROOT               legacy session MRD_C11_RCU (builds only the surviving digests)
 Makefile           build targets (above)
 ```
 
-## The mordor → Φ bridge
+## The MoRDor → Φ bridge
 
-The future set Φ is computed by the **mordor** weak memory explorer
+The future set Φ is computed by the **MoRDor** weak memory explorer
 (<https://github.com/christiankissig/mordor>) and rendered into Isabelle by
 `scripts/generate_phi.py`.
 
-**mordor exports futures.** Given a program (a `.lit` file), mordor's `isa` output mode
+**MoRDor exports futures.** Given a program (a `.lit` file), MoRDor's `isa` output mode
 (`src/isa_export.ml`) emits a single versioned JSON document — specified in
 [`docs/MORDOR_ISA_FORMAT.md`](docs/MORDOR_ISA_FORMAT.md) (schema v0.1) — that carries both:
 
@@ -112,13 +112,13 @@ The future set Φ is computed by the **mordor** weak memory explorer
 `scripts/generate_phi.py` consumes that JSON and emits an Isabelle theory containing (1) the
 digested program as `LABEL is INSTRUCTION` entries, and (2) the future set as a concrete constant
 `Φ_<prog>` — a set of edge-sets over event-labels, one set per execution (the renderer adds the
-reflexive closure mordor omits). The Isabelle-specific notation lives in this renderer, so mordor
+reflexive closure MoRDor omits). The Isabelle-specific notation lives in this renderer, so MoRDor
 stays prover-agnostic. The validated UAF bridge artifacts live under
 `workspace/spikes/uaf-bridge/`.
 
 ## Documentation
 
 - [`docs/W1_owicki_gries_design.md`](docs/W1_owicki_gries_design.md) — the Owicki-Gries / Ownership design.
-- [`docs/MORDOR_ISA_FORMAT.md`](docs/MORDOR_ISA_FORMAT.md) — the mordor↔Isabelle interchange format.
+- [`docs/MORDOR_ISA_FORMAT.md`](docs/MORDOR_ISA_FORMAT.md) — the MoRDor↔Isabelle interchange format.
 - `docs/SPIKE_{B,C,D}*` — label-digest, SMRD MemSem, and triage design notes.
 

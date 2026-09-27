@@ -83,7 +83,7 @@ The "12 000-sorry explosion" the rework targets is therefore concentrated and de
 | `RCU_state.thy` | SPLIT | **SPLIT** | 0/0 | pc type (drop S7) + registers/ownership → Core/RCU; `Futures`+`futures_list`+`futures` field → RETIRE. |
 | `RCU_atomics.thy` | ADAPT | **ADAPT** | 0/0 | Refactor into `OpSem` command instances. |
 | `RCU_prog.thy` | REPLACE | **REPLACE** | 0/0 | By `step` + `prog_RCU` data. |
-| `RCU_mrd.thy` | ADAPT | **ADAPT** | 0/0 | Align ppo/DP to mordor → EventStruct. |
+| `RCU_mrd.thy` | ADAPT | **ADAPT** | 0/0 | Align ppo/DP to MoRDor → EventStruct. |
 | `RCU_futures.thy` | REPLACE | **REPLACE** | **3**/0 | → generated `Φ_RCU`; the 3 sorries vanish with the file. |
 | `RCU_futures_inequalities.thy` (12113 lines) | RETIRE | **RETIRE** | 0/0 | Deleted with `futures_to_line_unique`. |
 
@@ -127,7 +127,7 @@ Worth lifting (failed/successful-CAS and `d_obs`/`c_obs` preservation, the SMRD-
 
 ### `RCU_atomics.thy`, `RCU_mrd.thy` (0 sorry)
 - `RCU_atomics`: ownership-transfer / allocation atomics → re-express as `OpSem` `command` instances (operands as args).
-- `RCU_mrd`: ppo/DP relation defs → align to mordor's `ppo`/`dp` in `EventStruct`.
+- `RCU_mrd`: ppo/DP relation defs → align to MoRDor's `ppo`/`dp` in `EventStruct`.
 
 ---
 
