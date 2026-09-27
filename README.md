@@ -13,7 +13,7 @@ prog, Φ ⊢ (σ, ρ, H) → (σ', ρ', H')
 
 The development is a **stack of self-contained, reusable Isabelle sessions**, with Φ
 generated from the [**mordor**](https://github.com/christiankissig/mordor)
-event-structure tool.
+weak memory explorer.
 
 ## Architecture
 
@@ -93,7 +93,7 @@ Makefile           build targets (above)
 
 ## The mordor → Φ bridge
 
-The future set Φ is computed by the **mordor** event-structure tool
+The future set Φ is computed by the **mordor** weak memory explorer
 (<https://github.com/christiankissig/mordor>) and rendered into Isabelle by
 `scripts/generate_phi.py`.
 
