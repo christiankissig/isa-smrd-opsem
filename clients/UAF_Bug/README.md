@@ -10,4 +10,4 @@ see `workspace/spikes/uaf-bridge/`).
 free out of `horizonΦ_{H₀}`) — matching the paper's `tab-fut-step-bug` / `-fix`.
 
 **Status:** `uaf_reachable_bug` and `uaf_excluded_fixed` proven (the latter over a
-handshake-enriched Φ; see "The mordor → Φ bridge" in the top-level README).
+handshake-enriched Φ; see `workspace/spikes/uaf-bridge/README.md`).

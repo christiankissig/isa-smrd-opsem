@@ -116,18 +116,6 @@ reflexive closure mordor omits). The Isabelle-specific notation lives in this re
 stays prover-agnostic. The validated UAF bridge artifacts live under
 `workspace/spikes/uaf-bridge/`.
 
-**The cross-thread handshake edge is derived.** `uaf_excluded_fixed` is proven over
-a Φ enriched with the handshake DP edge `release-exit → reclaimer-read` (`t1.3#0 → t0.1#0`) that
-orders the reclaimer's quiescence read after the reader's release. This synchronizes-with edge comes
-from mordor's per-execution **reads-from** relation (`rf`, in the `executions`-mode JSON). Given a companion executions document,
-`generate_phi.py --executions EXEC.json` **derives** the handshake edges: for every `rf(W,R)`
-whose writer `W` is a release-class write, it adds `W → R`, joining the executions' opaque
-event-ids to the isa event-labels. This is execution-faithful (it uses mordor's computed
-`rf`) and selects exactly the synchronizing subset — the buggy variant's exit write
-is relaxed, so it gains no edge and stays reachable. On the UAF fixtures this reproduces precisely
-`t1.3#0 → t0.1#0` for the fixed program (in the freeing execution) and nothing for the bug. `UAF_Bug.thy`
-currently defines the same edge by hand over Core types.
-
 ## Documentation
 
 - [`docs/W1_owicki_gries_design.md`](docs/W1_owicki_gries_design.md) — the Owicki-Gries / Ownership design.
