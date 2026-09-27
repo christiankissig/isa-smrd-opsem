@@ -13,10 +13,7 @@ prog, Φ ⊢ (σ, ρ, H) → (σ', ρ', H')
 
 The development is a **stack of self-contained, reusable Isabelle sessions**, several
 intended for the **Archive of Formal Proofs (AFP)**, with Φ generated from the
-[**mordor**](https://github.com/christiankissig/mordor) event-structure tool. It replaces an
-earlier monolithic proof that encoded futures as an
-enumerated datatype (which exploded the proof goals); that legacy development has been
-retired.
+[**mordor**](https://github.com/christiankissig/mordor) event-structure tool.
 
 ## Architecture
 
